@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoodAgent 架构总览</title>
+<style>
+:root{
+  --bg:#F7F7F5; --card:#FFFFFF; --line:#E3E1DA;
+  --ink:#22221F; --ink2:#5F5E5A; --ink3:#888780;
+  --blue50:#E6F1FB; --blue100:#B5D4F4; --blue600:#185FA5; --blue800:#0C447C;
+  --teal50:#E1F5EE; --teal600:#0F6E56; --teal800:#085041;
+  --amber50:#FAEEDA; --amber600:#BA7517; --amber800:#633806;
+  --gray50:#F1EFE8; --gray200:#B4B2A9;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px;line-height:1.7;}
+.wrap{max-width:1180px;margin:0 auto;padding:36px 28px 72px}
+header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:8px}
+h1{font-size:26px;font-weight:600;margin:0 0 8px;letter-spacing:.3px}
+.sub{color:var(--ink2);font-size:14px;margin:0}
+.meta{color:var(--ink3);font-size:12px;margin-top:10px}
+h2{font-size:18px;font-weight:600;margin:44px 0 6px;padding-left:11px;
+  border-left:3px solid var(--blue600)}
+h2 .n{color:var(--blue600);margin-right:6px}
+.note{color:var(--ink2);font-size:13px;margin:6px 0 18px;padding-left:14px}
+.sec{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px}
+
+/* 分层架构 */
+.layer{display:flex;align-items:stretch;gap:12px;margin-bottom:0}
+.layer .tag{width:88px;flex:0 0 88px;display:flex;flex-direction:column;justify-content:center;
+  font-size:12px;color:var(--ink3);line-height:1.4;text-align:right;padding-right:4px}
+.layer .tag b{display:block;font-size:13px;color:var(--ink);font-weight:600}
+.layer .body{flex:1;display:grid;gap:8px}
+.box{border:1px solid var(--blue600);background:var(--blue50);border-radius:7px;
+  padding:9px 12px;font-size:13px;color:var(--blue800)}
+.box.gray{border-color:var(--gray200);background:var(--gray50);color:var(--ink)}
+.box.teal{border-color:var(--teal600);background:var(--teal50);color:var(--teal800)}
+.box b{font-weight:600}
+.box span{display:block;color:var(--ink2);font-size:12px}
+.down{height:20px;display:flex;align-items:center;justify-content:center;
+  color:var(--gray200);font-size:11px;letter-spacing:2px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+
+/* 步骤条 */
+.steps{display:grid;gap:0}
+.step{display:grid;grid-template-columns:34px 1fr;gap:14px;position:relative;padding-bottom:16px}
+.step:not(:last-child)::before{content:"";position:absolute;left:16px;top:28px;bottom:0;
+  width:1px;background:var(--line)}
+.step .idx{width:33px;height:33px;border-radius:50%;background:var(--blue50);
+  border:1px solid var(--blue100);color:var(--blue800);display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:600;z-index:1}
+.step .txt{padding-top:5px}
+.step .txt b{font-weight:600}
+.step .txt code{background:var(--gray50);border:1px solid var(--line);border-radius:4px;
+  padding:1px 5px;font-size:12px;color:var(--ink2);font-family:Consolas,monospace}
+
+/* Agent 四列 */
+.agents{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.agent{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--card)}
+.agent .hd{padding:10px 12px;border-bottom:1px solid var(--line);background:var(--blue50)}
+.agent .hd b{display:block;font-size:13px;color:var(--blue800);font-weight:600}
+.agent .hd span{font-size:12px;color:var(--blue600)}
+.agent .bd{padding:14px 12px}
+.pill{border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px;
+  background:var(--gray50);color:var(--ink);text-align:center}
+.pill.branch{border-color:#EF9F27;background:var(--amber50);color:var(--amber800)}
+.pill.end{border-color:var(--teal600);background:var(--teal50);color:var(--teal800)}
+.pill code{font-family:Consolas,monospace;font-size:11px;color:var(--ink2);display:block}
+.arrow{text-align:center;color:var(--gray200);font-size:11px;line-height:1.3;padding:2px 0}
+.lbl{font-size:11px;color:var(--ink3);text-align:center;margin:-1px 0 1px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--ink);background:var(--gray50);font-size:12px}
+td code,th code{font-family:Consolas,monospace;font-size:12px;background:var(--gray50);
+  border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+.tag2{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;
+  border:1px solid var(--line);color:var(--ink2);background:var(--gray50)}
+.tag2.ok{border-color:#9FE1CB;background:var(--teal50);color:var(--teal800)}
+.tag2.warn{border-color:#FAC775;background:var(--amber50);color:var(--amber800)}
+.foot{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);
+  color:var(--ink3);font-size:12px}
+@media(max-width:860px){
+  .agents{grid-template-columns:1fr}
+  .g3,.g4{grid-template-columns:1fr 1fr}
+  .layer .tag{width:auto;flex:0 0 64px;font-size:11px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>FoodAgent · 架构总览</h1>
+  <p class="sub">基于 LangGraph 状态图 + Orchestrator 编排器的连锁餐饮智能助手 —— 4 Agent / 33 节点 / 15 工具 / 9 意图 / 三层记忆</p>
+  <div class="meta">配套文档：README.md（业务与运行）· docs/ARCHITECTURE.md（细节与代码索引）</div>
+</header>
+
+<h2><span class="n">01</span>分层架构</h2>
+<p class="note">自上而下是调用方向，自下而上是依赖方向。每一层只做自己该做的事，边界清晰才可扩展。</p>
+<div class="sec">
+
+  <div class="layer">
+    <div class="tag"><b>交互层</b>static/</div>
+    <div class="body">
+      <div class="box"><b>前端单页 index.html</b><span>聊天窗口 · SSE 打字机 · 角色切换</span></div>
+    </div>
+  </div>
+  <div class="down">▼</div>
+
+  <div class="layer">
+    <div class="tag"><b>接口层</b>api/</div>
+    <div class="body">
+      <div class="box"><b>FastAPI 装配与路由</b><span>18 个 RESTful 接口 · JWT 鉴权 · 生命周期钩子 · SSE 编码</span></div>
+    </div>
+  </div>
+  <div class="down">▼</div>
+
+  <div class="layer">
+    <div class="tag"><b>编排层</b>agents/</div>
+    <div class="body">
+      <div class="box"><b>Orchestrator 编排器</b><span>意图识别（LLM 优先 / 规则兜底）· 单 Agent 直达 · 多 Agent Pipeline · 上下文传递</span></div>
+    </div>
+  </div>
+  <div class="down">▼</div>
+
+  <div class="layer">
+    <div class="tag"><b>Agent 层</b>LangGraph</div>
+    <div class="body g4">
+      <div class="box"><b>OrderAgent</b><span>10 节点 · 点餐主流程</span></div>
+      <div class="box"><b>KitchenAgent</b><span>7 节点 · 后厨排产</span></div>
+      <div class="box"><b>ReviewAgent</b><span>7 节点 · 评价分析</span></div>
+      <div class="box"><b>SafetyAgent</b><span>9 节点 · 食安问答</span></div>
+    </div>
+  </div>
+  <div class="down">▼</div>
+
+  <div class="layer">
+    <div class="tag"><b>工具层</b>tools/</div>
+    <div class="body g4">
+      <div class="box gray"><b>LLM 工具 · 4</b><span>理解自然语言</span></div>
+      <div class="box gray"><b>规则引擎 · 4</b><span>精确计算</span></div>
+      <div class="box gray"><b>MCP 工具 · 4</b><span>知识库检索</span></div>
+      <div class="box gray"><b>外部 API · 3</b><span>POS / KDS</span></div>
+    </div>
+  </div>
+  <div class="down">▼</div>
+
+  <div class="layer">
+    <div class="tag"><b>记忆层</b>memory/</div>
+    <div class="body g4">
+      <div class="box teal"><b>Checkpointer</b><span>thread_id 隔离</span></div>
+      <div class="box teal"><b>长期记忆 · 6 表</b><span>门店 / 顾客 / 合规</span></div>
+      <div class="box teal"><b>Redis 缓存</b><span>db2 · 热点数据</span></div>
+      <div class="box teal"><b>内置知识库</b><span>法规 / 菜品 / 营养</span></div>
+    </div>
+  </div>
+
+</div>
+
+<h2><span class="n">02</span>一次请求的链路</h2>
+<p class="note">以 POST /api/chat 为例。全程用 thread_id 串联，日志里可以按它过滤出完整轨迹。</p>
+<div class="sec">
+  <div class="steps">
+    <div class="step"><div class="idx">1</div><div class="txt"><b>请求进入</b> 前端带 Bearer JWT 调用 <code>POST /api/chat</code></div></div>
+    <div class="step"><div class="idx">2</div><div class="txt"><b>鉴权</b> <code>api/auth.py</code> 解出 tenant_id / user_id / role，作为后续数据隔离的键</div></div>
+    <div class="step"><div class="idx">3</div><div class="txt"><b>生成 thread_id</b> <code>orchestrator.run()</code> 入口，作为 Checkpointer 的隔离键</div></div>
+    <div class="step"><div class="idx">4</div><div class="txt"><b>读长期记忆</b> 加载门店偏好 + 顾客画像，注入 State</div></div>
+    <div class="step"><div class="idx">5</div><div class="txt"><b>识别意图</b> LLM 输出 JSON；失败或非法则用 9 组关键词规则兜底，保证永远能路由</div></div>
+    <div class="step"><div class="idx">6</div><div class="txt"><b>分流</b> 单意图 → 直达一个 Agent；跨 Agent 或含“全流程” → Pipeline 串联</div></div>
+    <div class="step"><div class="idx">7</div><div class="txt"><b>执行状态图</b> 节点按需调用工具，工具失败进 <code>degraded_tools</code> 并降级继续</div></div>
+    <div class="step"><div class="idx">8</div><div class="txt"><b>落快照</b> 每个节点执行后 Checkpointer 自动存 State（PG 模式下写入 checkpoints 表）</div></div>
+    <div class="step"><div class="idx">9</div><div class="txt"><b>汇总返回</b> <code>_aggregate()</code> 产出 answer / pending_actions / degraded_tools，走 JSON 或 SSE</div></div>
+  </div>
+</div>
+
+<h2><span class="n">03</span>四个 Agent 的节点流</h2>
+<p class="note">橙色节点是需要判断的分支点，青色是终态。加新节点：写进 nodes.py → 在 graph.py 的 define_nodes/define_structure 登记。</p>
+<div class="sec">
+  <div class="agents">
+
+    <div class="agent">
+      <div class="hd"><b>OrderAgent</b><span>10 节点 · 点餐主流程</span></div>
+      <div class="bd">
+        <div class="pill"><code>parse_order</code>解析需求</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>recommend_dishes</code>LLM 推荐</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>check_allergens</code>规则精确判定</div>
+        <div class="lbl">中/高风险 ↘　无风险 →</div>
+        <div class="pill"><code>confirm_allergen_notice</code>口头告知留痕</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>check_nutrition</code>营养分析</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>calculate_price</code>价格计算</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>validate_order</code>完整性校验</div>
+        <div class="lbl">不通过且未超限 ↺ 回推荐</div>
+        <div class="pill"><code>generate_summary</code>生成摘要</div>
+        <div class="arrow">▼</div>
+        <div class="pill end"><code>submit_order</code>提交 POS + 后厨</div>
+        <div class="arrow">或超重试上限</div>
+        <div class="pill branch"><code>require_manual_review</code>转人工</div>
+      </div>
+    </div>
+
+    <div class="agent">
+      <div class="hd"><b>KitchenAgent</b><span>7 节点 · 后厨排产</span></div>
+      <div class="bd">
+        <div class="pill"><code>load_orders</code>加载待处理订单</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>check_inventory</code>食材够不够</div>
+        <div class="lbl">缺料 ↺ 重载订单</div>
+        <div class="pill"><code>generate_tasks</code>拆解出餐任务</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>schedule_tasks</code>按优先级排产</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>check_priority</code>需主管确认？</div>
+        <div class="lbl">主管调整 ↺ 重排</div>
+        <div class="pill"><code>assign_stations</code>分配工位</div>
+        <div class="arrow">▼</div>
+        <div class="pill end"><code>dispatch_orders</code>下发 KDS</div>
+        <div class="lbl" style="margin-top:14px">两条回环都有重试上限，<br>超限不阻断出餐</div>
+      </div>
+    </div>
+
+    <div class="agent">
+      <div class="hd"><b>ReviewAgent</b><span>7 节点 · 评价分析</span></div>
+      <div class="bd">
+        <div class="pill"><code>collect_reviews</code>多平台采集</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>classify_sentiment</code>情感分析</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>extract_topics</code>主题提取</div>
+        <div class="lbl">涉食安 → 先查法规</div>
+        <div class="pill"><code>query_food_safety</code>食安法规检索</div>
+        <div class="arrow">▼</div>
+        <div class="pill"><code>generate_report</code>生成报告</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>check_negative</code>有严重差评？</div>
+        <div class="lbl">店长要求重写 ↺ 回报告</div>
+        <div class="pill end"><code>save_analysis</code>写入长期记忆</div>
+      </div>
+    </div>
+
+    <div class="agent">
+      <div class="hd"><b>SafetyAgent</b><span>9 节点 · 食安问答（轻量 RAG）</span></div>
+      <div class="bd">
+        <div class="pill branch"><code>classify_query</code>问题分类</div>
+        <div class="lbl">通用 → 直答 ｜ 法规/营养/过敏原 → 检索</div>
+        <div class="pill"><code>retrieve_knowledge</code>查内置知识库</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>check_confidence</code>检索命中？</div>
+        <div class="lbl">未命中 → 联网兜底</div>
+        <div class="pill"><code>web_search</code>联网搜索</div>
+        <div class="arrow">▼</div>
+        <div class="pill branch"><code>generate_fallback</code>还能答吗？</div>
+        <div class="lbl">不可答 → 转人工（附服务热线）</div>
+        <div class="pill end"><code>save_memory</code>落定 + 整理来源</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<h2><span class="n">04</span>三层记忆</h2>
+<p class="note">短期记忆存「过程」，长期记忆存「事实」。Checkpointer 不能替代数据库做统计。</p>
+<div class="sec">
+  <table>
+    <tr><th style="width:110px">层</th><th>载体</th><th style="width:130px">隔离键</th><th>存什么</th><th style="width:120px">保留</th></tr>
+    <tr><td><b>短期</b></td><td>LangGraph Checkpointer（PG 表 / 内存）</td><td><code>thread_id</code></td><td>运行时 State 快照，支持多轮与断点续传</td><td>90 天</td></tr>
+    <tr><td><b>长期</b></td><td>PostgreSQL 6 张业务表（降级 JSON 文件）</td><td><code>tenant_id</code> + <code>user_id</code></td><td>门店偏好、顾客画像、评价分析、食材消耗</td><td>永久 / 730 天</td></tr>
+    <tr><td><b>合规</b></td><td><code>compliance_log</code> + <code>order_status_log</code></td><td><code>tenant_id</code> + <code>user_id</code></td><td>过敏原告知与确认、订单全链路流转</td><td>3 年 / 90 天</td></tr>
+  </table>
+  <p class="note" style="margin:16px 0 0;padding-left:0">
+    写入语义：<span class="tag2 ok">UPSERT 幂等</span> 门店偏好 / 顾客画像一店一人一行；
+    <span class="tag2 ok">原子累加</span> 食材消耗用 ON CONFLICT 增量更新，多进程并发也正确。
+  </p>
+</div>
+
+<h2><span class="n">05</span>降级设计</h2>
+<p class="note">「有依赖更强，无依赖也能跑」。所有降级都会写进响应的 degraded_tools 字段。</p>
+<div class="sec">
+  <table>
+    <tr><th style="width:170px">依赖</th><th>缺失时行为</th><th style="width:230px">代码位置</th></tr>
+    <tr><td><code>langgraph</code></td><td>降级为顺序执行器，条件边退化为 if/else</td><td><code>base_agent.py</code></td></tr>
+    <tr><td>LangGraph 静默中断</td><td>未达终态时自动补跑一次顺序执行</td><td><code>_reached_terminal()</code></td></tr>
+    <tr><td>DeepSeek API</td><td>所有 LLM 工具走规则引擎分支</td><td><code>llm_client.py</code></td></tr>
+    <tr><td>PostgreSQL</td><td>长期记忆 → JSON 文件；Checkpointer → 内存</td><td><code>store.py</code> / <code>checkpointer.py</code></td></tr>
+    <tr><td>Redis</td><td>缓存降级进程内字典（启动会多等约 48 秒）</td><td><code>cache.py</code></td></tr>
+    <tr><td>外部知识源 / 联网搜索</td><td>回落内置知识库（法规 + 菜品 + 营养）；联网失败走 24h 缓存</td><td><code>mcp_tools.py</code></td></tr>
+    <tr><td>POS / KDS</td><td>返回 Mock 数据，流程仍可走通</td><td><code>external_api.py</code></td></tr>
+    <tr><td>LangSmith / Prometheus</td><td>追踪与指标退化为 no-op，零开销</td><td><code>tracing.py</code> / <code>metrics.py</code></td></tr>
+  </table>
+</div>
+
+<h2><span class="n">06</span>代码索引</h2>
+<p class="note">想改什么，直接定位。改完记得跑 scripts/selfcheck.py。</p>
+<div class="sec">
+  <table>
+    <tr><th style="width:250px">我要改</th><th>去哪里</th></tr>
+    <tr><td>加一个意图</td><td><code>base/config.py</code> 的 INTENT_ROUTES + <code>orchestrator.py</code> 的 INTENT_KEYWORDS</td></tr>
+    <tr><td>加一个 Agent 节点</td><td><code>agents/&lt;agent&gt;/nodes.py</code> 写函数 → <code>graph.py</code> 的 define_nodes / define_structure</td></tr>
+    <tr><td>改分支条件</td><td><code>agents/&lt;agent&gt;/graph.py</code> 的 conditional_edges</td></tr>
+    <tr><td>改 Prompt</td><td><code>prompts/templates.py</code> 或 <code>agents/&lt;agent&gt;/prompts.py</code></td></tr>
+    <tr><td>加一个工具</td><td><code>tools/*_tools.py</code> 写函数 → <code>registry.py</code> 登记归属与说明</td></tr>
+    <tr><td>加一张记忆表</td><td><code>memory/schemas.py</code> 的 DDL → <code>store.py</code> 加读写方法</td></tr>
+    <tr><td>改记忆保留策略</td><td><code>config.ini [memory]</code> 或 <code>.env</code> 的 MEMORY_RETENTION_*</td></tr>
+    <tr><td>开关可选组件</td><td><code>.env</code> 的 PG_ENABLED / REDIS_ENABLED / LANGSMITH_ENABLED / PROMETHEUS_ENABLED</td></tr>
+  </table>
+</div>
+
+<div class="foot">
+  FoodAgent · 架构总览 v1.0 &nbsp;|&nbsp; 生成于 2026-10-18 &nbsp;|&nbsp; 详细说明见 docs/ARCHITECTURE.md
+</div>
+
+</div>
+</body>
+</html>
