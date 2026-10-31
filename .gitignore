@@ -1,0 +1,51 @@
+# ============================================================
+#  FoodAgent · 忽略规则
+# ============================================================
+
+# ---------- 密钥与本地配置（务必忽略） ----------
+.env
+.env.local
+*.env.local
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+env/
+ENV/
+
+# ---------- 运行时产物 ----------
+logs/
+*.log
+data/memory_store/
+data/checkpoints/
+data/cache/
+# 验证/自检脚本的临时记忆目录（scripts/_tmp_store.py 创建，退出自动清理；
+# 这里再兜一层，防止脚本被强制中断时留下残留被误提交）
+data/_verify_tmp/
+data/_purge_selftest_tmp/
+
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---------- 系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini

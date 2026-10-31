@@ -1,0 +1,93 @@
+# ============================================================
+#  FoodAgent AI 智能餐饮 Agent 系统 · 一键编排
+#
+#  启动（含 PostgreSQL，启用完整三层记忆）：
+#      docker compose -f docs/deploy/docker-compose.yml up -d
+#
+#  停止：
+#      docker compose -f docs/deploy/docker-compose.yml down
+#
+#  说明：
+#    · 知识层为内置知识库（法规/菜品/营养），不再依赖外部食安服务，单容器即可跑通
+#    · PostgreSQL 用于长期记忆 + LangGraph Checkpointer
+#    · 首次启动会自动建表（memory/schemas.py 幂等 DDL）
+#    · 宿主端口占用：5432 = foodagent_postgres（本机开发用 PG 容器）、
+#      5433 = edu_agent_postgres（另一项目），故 db 映射默认用 5434，
+#      可用 PG_HOST_PORT 覆盖
+# ============================================================
+
+services:
+  # ---------- 主服务：FoodAgent ----------
+  foodagent:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: foodagent:1.0.0
+    container_name: foodagent
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8090
+      # DeepSeek 大模型（务必替换为真实 Key，或改用 env_file 引入 .env）
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+      # PostgreSQL（容器内指向 db 服务）
+      PG_ENABLED: "true"
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_USER: ${PG_USER:-foodagent}
+      PG_PASSWORD: ${PG_PASSWORD:-foodagent_pwd}
+      PG_DATABASE: ${PG_DATABASE:-foodagent}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-in-production}
+      # 备用模型（留空 = 未启用，行为与切换前一致）
+      LLM_FALLBACK_ENABLED: ${LLM_FALLBACK_ENABLED:-true}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+      # 后厨
+      KITCHEN_INTERRUPT_THRESHOLD: "10"
+    volumes:
+      - ./../../logs:/app/logs
+      - ./../../data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - foodagent-net
+
+  # ---------- PostgreSQL：长期记忆 + Checkpointer ----------
+  db:
+    image: postgres:16-alpine
+    container_name: foodagent-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-foodagent}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-foodagent_pwd}
+      POSTGRES_DB: ${PG_DATABASE:-foodagent}
+      TZ: Asia/Shanghai
+    ports:
+      # 宿主端口用变量：本机 5432 已被 foodagent_postgres（开发用 PG）占用，
+      # 5433 已被 edu_agent_postgres 占用，这里默认 5434 以彻底避开冲突。
+      # 若 5434 也被占：PG_HOST_PORT=5435 docker compose -f docs/deploy/docker-compose.yml up -d
+      - "${PG_HOST_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 首次启动自动建表
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-foodagent} -d ${PG_DATABASE:-foodagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - foodagent-net
+
+networks:
+  foodagent-net:
+    driver: bridge
+
+volumes:
+  pgdata:

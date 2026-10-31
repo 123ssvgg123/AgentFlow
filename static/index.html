@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FoodAgent · AI 智能餐饮助手</title>
+<style>
+/* ============ 设计令牌 ============ */
+:root{
+  --bg:#0f1115; --bg-soft:#151922; --panel:#1a1f2b; --panel-2:#212836;
+  --line:#2a3243; --line-soft:#232a38;
+  --text:#e8ecf3; --text-dim:#9aa5b8; --text-mute:#6b7688;
+  --brand:#e8552f; --brand-soft:#ff7a4d; --brand-dim:rgba(232,85,47,.12);
+  --ok:#2fbf71; --warn:#f0b429; --danger:#e5484d; --info:#4c8dff;
+  --radius:12px; --radius-sm:8px;
+  --shadow:0 8px 28px rgba(0,0,0,.35);
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+/* 亮色主题：通过 <html data-theme="light"> 覆盖设计令牌 */
+[data-theme="light"]{
+  --bg:#f4f6fb; --bg-soft:#ffffff; --panel:#ffffff; --panel-2:#eceff6;
+  --line:#d9e0ec; --line-soft:#e5e9f2;
+  --text:#1b2437; --text-dim:#5b6a84; --text-mute:#8995ab;
+  --brand:#e8552f; --brand-soft:#d94a20; --brand-dim:rgba(232,85,47,.08);
+  --ok:#1f9d5f; --warn:#c98a06; --danger:#d54045; --info:#2f6fe0;
+  --shadow:0 8px 28px rgba(30,40,70,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.6;
+  overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea{font-family:inherit;font-size:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#333c4d;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#465168}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ============ 布局 ============ */
+.app{display:flex;height:100vh}
+
+/* ---- 左侧边栏 ---- */
+.sidebar{
+  width:264px;flex-shrink:0;background:var(--bg-soft);
+  border-right:1px solid var(--line-soft);display:flex;flex-direction:column;
+}
+.brand{
+  padding:18px 18px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--line-soft);
+}
+.brand-mark{
+  width:34px;height:34px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--brand),var(--brand-soft));
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-mark svg{width:19px;height:19px;stroke:#fff}
+.brand-text b{display:block;font-size:15px;letter-spacing:.3px}
+.brand-text span{font-size:11px;color:var(--text-mute)}
+
+.side-section{padding:14px 12px 0}
+.side-label{
+  font-size:11px;color:var(--text-mute);text-transform:uppercase;
+  letter-spacing:.8px;padding:0 6px 8px;font-weight:600;
+}
+.btn-new{
+  width:100%;padding:10px 12px;border-radius:var(--radius-sm);
+  background:var(--brand-dim);border:1px solid rgba(232,85,47,.3);
+  color:var(--brand-soft);font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:8px;transition:.16s;
+}
+.btn-new:hover{background:rgba(232,85,47,.2);border-color:var(--brand)}
+.btn-new svg{width:15px;height:15px;stroke:currentColor}
+
+.task-list{flex:1;overflow-y:auto;padding:8px 12px 0;margin-top:4px}
+.task-item{
+  padding:9px 10px;border-radius:var(--radius-sm);font-size:13px;color:var(--text-dim);
+  display:flex;align-items:center;gap:8px;cursor:pointer;transition:.15s;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.task-item:hover{background:var(--panel)}
+.task-item.active{background:var(--panel-2);color:var(--text)}
+.task-item svg{width:14px;height:14px;flex-shrink:0;stroke:currentColor;opacity:.7}
+
+.side-footer{padding:12px;border-top:1px solid var(--line-soft)}
+.user-card{
+  display:flex;align-items:center;gap:10px;padding:8px;
+  border-radius:var(--radius-sm);background:var(--panel);
+}
+.avatar{
+  width:32px;height:32px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#3d4a63,#2a3243);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;color:var(--text-dim);
+}
+.user-meta{flex:1;min-width:0}
+.user-meta b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-meta span{font-size:11px;color:var(--text-mute)}
+.btn-logout{
+  padding:5px;border-radius:6px;color:var(--text-mute);transition:.15s;
+}
+.btn-logout:hover{color:var(--danger);background:rgba(229,72,77,.1)}
+.btn-logout svg{width:15px;height:15px;stroke:currentColor;display:block}
+
+/* ---- 主区域 ---- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+.topbar{
+  height:52px;flex-shrink:0;border-bottom:1px solid var(--line-soft);
+  display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--bg-soft);
+}
+.topbar h1{font-size:14px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{
+  font-size:11px;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--line);color:var(--text-dim);background:var(--panel);
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--text-mute)}
+.chip.ok .dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.chip.warn .dot{background:var(--warn)}
+.chip.err .dot{background:var(--danger)}
+.btn-ghost{
+  padding:6px 12px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-dim);
+  border:1px solid var(--line);transition:.15s;white-space:nowrap;
+}
+.btn-ghost:hover{color:var(--text);border-color:#3a4459;background:var(--panel)}
+
+/* ---- 消息区 ---- */
+.messages{flex:1;overflow-y:auto;padding:26px 0 12px}
+.msg-wrap{max-width:900px;margin:0 auto;padding:0 26px}
+.msg{margin-bottom:22px;display:flex;gap:13px;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg-avatar{
+  width:30px;height:30px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.msg.user .msg-avatar{background:linear-gradient(135deg,#3d4a63,#2a3243)}
+.msg.agent .msg-avatar{background:linear-gradient(135deg,var(--brand),var(--brand-soft))}
+.msg-avatar svg{width:16px;height:16px;stroke:#fff}
+.msg-body{flex:1;min-width:0}
+.msg-name{font-size:11.5px;color:var(--text-mute);margin-bottom:5px;font-weight:600}
+.bubble{
+  background:var(--panel);border:1px solid var(--line-soft);
+  border-radius:var(--radius);padding:12px 15px;font-size:13.5px;
+  overflow-wrap:break-word;
+}
+.msg.user .bubble{background:var(--panel-2)}
+
+/* Markdown 渲染样式 */
+.bubble h1{font-size:16px;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.bubble h1:first-child{margin-top:0}
+.bubble h2{font-size:14.5px;margin:12px 0 6px}
+.bubble h3{font-size:13.5px;margin:10px 0 5px;color:var(--text-dim)}
+.bubble p{margin:6px 0}
+.bubble ul,.bubble ol{margin:6px 0 6px 20px}
+.bubble li{margin:3px 0}
+.bubble code{
+  font-family:var(--mono);font-size:12.5px;background:#0c0f14;
+  padding:1.5px 5px;border-radius:4px;color:#f0956f;
+}
+.bubble pre{
+  background:#0c0f14;border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:12px;overflow-x:auto;margin:10px 0;
+}
+.bubble pre code{background:none;padding:0;color:var(--text-dim)}
+.bubble table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+.bubble th,.bubble td{border:1px solid var(--line);padding:7px 10px;text-align:left}
+.bubble th{background:var(--panel-2);font-weight:600;color:var(--text-dim)}
+.bubble blockquote{
+  border-left:3px solid var(--brand);background:var(--brand-dim);
+  padding:9px 13px;margin:10px 0;border-radius:0 6px 6px 0;
+}
+.bubble blockquote p{margin:2px 0}
+.bubble hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+.bubble strong{color:#fff;font-weight:600}
+.bubble a{color:var(--info);text-decoration:none}
+
+/* 意图/阶段标签 */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.tag{
+  font-size:11px;padding:2.5px 8px;border-radius:5px;font-weight:500;
+  border:1px solid;display:inline-flex;align-items:center;gap:4px;
+}
+.tag.intent{color:var(--info);border-color:rgba(76,141,255,.35);background:rgba(76,141,255,.1)}
+.tag.pipeline{color:var(--brand-soft);border-color:rgba(232,85,47,.35);background:var(--brand-dim)}
+.tag.degraded{color:var(--warn);border-color:rgba(240,180,41,.35);background:rgba(240,180,41,.1)}
+.tag.risk-high{color:var(--danger);border-color:rgba(229,72,77,.4);background:rgba(229,72,77,.12)}
+.tag.risk-mid{color:var(--warn);border-color:rgba(240,180,41,.35);background:rgba(240,180,41,.1)}
+.tag.risk-ok{color:var(--ok);border-color:rgba(47,191,113,.35);background:rgba(47,191,113,.1)}
+
+/* 阶段进度 */
+.stages{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.stage{
+  font-size:11.5px;padding:5px 11px;border-radius:20px;background:var(--panel-2);
+  border:1px solid var(--line);color:var(--text-mute);display:flex;align-items:center;gap:6px;
+}
+.stage.done{color:var(--ok);border-color:rgba(47,191,113,.3)}
+.stage.run{color:var(--brand-soft);border-color:rgba(232,85,47,.4)}
+.spinner{
+  width:11px;height:11px;border:2px solid rgba(255,255,255,.15);
+  border-top-color:var(--brand-soft);border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cursor-blink::after{
+  content:"▋";color:var(--brand-soft);animation:blink 1s step-end infinite;margin-left:1px;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* 人工确认卡片 */
+.confirm-card{
+  margin-top:11px;border:1px solid rgba(240,180,41,.35);background:rgba(240,180,41,.08);
+  border-radius:var(--radius-sm);padding:12px 14px;
+}
+.confirm-card h4{font-size:12.5px;color:var(--warn);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.confirm-card h4 svg{width:14px;height:14px;stroke:currentColor}
+.confirm-card p{font-size:12.5px;color:var(--text-dim);margin-bottom:9px}
+.confirm-actions{display:flex;gap:8px}
+.btn-confirm{
+  padding:6px 16px;border-radius:6px;font-size:12.5px;font-weight:600;
+  background:var(--warn);color:#1a1200;transition:.15s;
+}
+.btn-confirm:hover{filter:brightness(1.1)}
+.btn-cancel{
+  padding:6px 16px;border-radius:6px;font-size:12.5px;
+  border:1px solid var(--line);color:var(--text-dim);transition:.15s;
+}
+.btn-cancel:hover{border-color:#3a4459;color:var(--text)}
+
+/* 数据面板（元信息） */
+.meta-panel{
+  margin-top:11px;display:flex;flex-wrap:wrap;gap:14px;
+  padding-top:11px;border-top:1px dashed var(--line);
+  font-size:11.5px;color:var(--text-mute);
+}
+.meta-panel span b{color:var(--text-dim);font-weight:600}
+
+/* ---- 欢迎页 ---- */
+.welcome{max-width:900px;margin:0 auto;padding:40px 26px}
+.welcome-title{font-size:26px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px}
+.welcome-title .hl{
+  background:linear-gradient(120deg,var(--brand),var(--brand-soft));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.welcome-sub{color:var(--text-dim);font-size:13.5px;margin-bottom:26px}
+.quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:11px;margin-bottom:26px}
+.quick-card{
+  text-align:left;padding:14px;border-radius:var(--radius);background:var(--panel);
+  border:1px solid var(--line-soft);transition:.18s;display:flex;gap:11px;align-items:flex-start;
+}
+.quick-card:hover{border-color:var(--brand);background:var(--panel-2);transform:translateY(-2px)}
+.quick-icon{
+  width:30px;height:30px;border-radius:8px;flex-shrink:0;background:var(--brand-dim);
+  display:flex;align-items:center;justify-content:center;
+}
+.quick-icon svg{width:16px;height:16px;stroke:var(--brand-soft)}
+.quick-card .qt{font-size:13px;font-weight:600;margin-bottom:2px}
+.quick-card .qd{font-size:11.5px;color:var(--text-mute);line-height:1.4}
+
+.cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:11px}
+.cap-card{
+  padding:14px;border-radius:var(--radius);background:var(--panel);
+  border:1px solid var(--line-soft);
+}
+.cap-card .num{font-size:22px;font-weight:700;color:var(--brand-soft);line-height:1.2}
+.cap-card .lbl{font-size:12px;color:var(--text-dim);margin-top:3px}
+.cap-card .sub{font-size:11px;color:var(--text-mute);margin-top:5px;font-family:var(--mono)}
+
+/* ---- 输入区 ---- */
+.composer{flex-shrink:0;padding:12px 0 18px;background:linear-gradient(transparent,var(--bg) 22%)}
+.composer-inner{max-width:900px;margin:0 auto;padding:0 26px}
+.composer-box{
+  display:flex;align-items:flex-end;gap:9px;padding:9px 9px 9px 15px;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  transition:.18s;box-shadow:var(--shadow);
+}
+.composer-box:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-dim),var(--shadow)}
+.composer-box textarea{
+  flex:1;background:none;border:none;outline:none;color:var(--text);
+  resize:none;max-height:150px;line-height:1.55;padding:8px 0;font-size:13.5px;
+}
+.composer-box textarea::placeholder{color:var(--text-mute)}
+.btn-send{
+  width:34px;height:34px;border-radius:9px;flex-shrink:0;
+  background:var(--brand);display:flex;align-items:center;justify-content:center;transition:.15s;
+}
+.btn-send:hover{background:var(--brand-soft)}
+.btn-send:disabled{opacity:.4;cursor:not-allowed}
+.btn-send svg{width:17px;height:17px;stroke:#fff}
+.composer-tip{
+  font-size:11px;color:var(--text-mute);margin-top:7px;padding-left:3px;
+  display:flex;justify-content:space-between;
+}
+.composer-tip kbd{
+  background:var(--panel-2);border:1px solid var(--line);border-radius:4px;
+  padding:1px 5px;font-family:var(--mono);font-size:10.5px;
+}
+
+/* ---- 登录弹层 ---- */
+.login-mask{
+  position:fixed;inset:0;background:rgba(8,10,14,.88);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;z-index:100;
+}
+.login-card{
+  width:376px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.login-logo{
+  width:48px;height:48px;border-radius:13px;margin:0 auto 16px;
+  background:linear-gradient(135deg,var(--brand),var(--brand-soft));
+  display:flex;align-items:center;justify-content:center;
+}
+.login-logo svg{width:26px;height:26px;stroke:#fff}
+.login-card h2{font-size:19px;text-align:center;margin-bottom:5px;font-weight:700}
+.login-card .sub{font-size:12.5px;color:var(--text-mute);text-align:center;margin-bottom:22px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:500}
+.field input{
+  width:100%;padding:10px 13px;border-radius:var(--radius-sm);
+  background:var(--bg-soft);border:1px solid var(--line);color:var(--text);
+  outline:none;transition:.15s;font-size:13.5px;
+}
+.field input:focus{border-color:var(--brand);background:var(--panel-2)}
+.btn-login{
+  width:100%;padding:11px;border-radius:var(--radius-sm);margin-top:6px;
+  background:linear-gradient(135deg,var(--brand),var(--brand-soft));
+  color:#fff;font-size:14px;font-weight:600;transition:.15s;
+}
+.btn-login:hover{filter:brightness(1.08)}
+.btn-login:disabled{opacity:.6;cursor:not-allowed}
+.login-err{
+  font-size:12.5px;color:var(--danger);margin-top:11px;text-align:center;min-height:17px;
+}
+.demo-hint{
+  margin-top:18px;padding-top:16px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;color:var(--text-mute);
+}
+.demo-hint b{color:var(--text-dim);display:block;margin-bottom:7px;font-weight:600}
+.demo-acc{
+  display:flex;justify-content:space-between;padding:5px 9px;border-radius:5px;
+  cursor:pointer;transition:.13s;font-family:var(--mono);font-size:11px;
+}
+.demo-acc:hover{background:var(--panel-2);color:var(--brand-soft)}
+.demo-acc span:last-child{color:var(--text-mute)}
+
+.hidden{display:none !important}
+
+/* ============ 主题切换 / 移动端 ============ */
+.btn-icon{
+  width:30px;height:30px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim);border:1px solid var(--line);transition:.15s;flex-shrink:0;
+}
+.btn-icon:hover{color:var(--text);border-color:#3a4459;background:var(--panel)}
+.btn-icon svg{width:16px;height:16px;stroke:currentColor}
+
+/* 移动端侧边栏：默认隐藏，点汉堡展开为抽屉 */
+.btn-hamburger{display:none}
+.sidebar-backdrop{display:none}
+
+@media (max-width:860px){
+  .sidebar{
+    position:fixed;left:0;top:0;bottom:0;z-index:60;
+    transform:translateX(-100%);transition:transform .22s ease;
+    box-shadow:var(--shadow);
+  }
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(10,14,22,.45);
+    z-index:55;
+  }
+  .sidebar-backdrop.show{display:block}
+  .btn-hamburger{display:flex}
+  .msg-wrap,.composer-inner,.welcome{padding-left:16px;padding-right:16px}
+}
+
+/* 消息气泡：时间戳 + 复制按钮 */
+.msg-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.msg-name{font-size:11.5px;color:var(--text-mute);font-weight:600}
+.msg-time{font-size:10.5px;color:var(--text-mute);opacity:.75}
+.bubble-wrap{position:relative}
+.bubble-wrap .btn-copy{
+  position:absolute;top:8px;right:8px;opacity:0;transition:.15s;
+  padding:4px 8px;font-size:11px;border-radius:6px;color:var(--text-mute);
+  border:1px solid var(--line);background:var(--panel-2);
+}
+.bubble-wrap:hover .btn-copy{opacity:1}
+.btn-copy:hover{color:var(--text)}
+.btn-copy.copied{color:var(--ok);border-color:rgba(47,191,113,.4)}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ 左侧边栏 ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/>
+          <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <b>FoodAgent</b>
+        <span>AI 智能餐饮助手</span>
+      </div>
+    </div>
+
+    <div class="side-section">
+      <button class="btn-new" id="btnNewTask">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        新建任务
+      </button>
+    </div>
+
+    <div class="side-section" style="padding-top:16px">
+      <div class="side-label">历史任务</div>
+    </div>
+    <div class="task-list" id="taskList">
+      <div class="task-item" style="color:var(--text-mute);cursor:default">暂无历史任务</div>
+    </div>
+
+    <div class="side-footer" id="sideFooter" style="display:none">
+      <div class="user-card">
+        <div class="avatar" id="userAvatar">--</div>
+        <div class="user-meta">
+          <b id="userName">--</b>
+          <span id="userRole">--</span>
+        </div>
+        <button class="btn-logout" id="btnLogout" title="退出登录">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <!-- ============ 主区域 ============ -->
+  <main class="main">
+    <div class="topbar">
+      <button class="btn-icon btn-hamburger" id="btnMenu" title="菜单">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <h1 id="chatTitle">新任务</h1>
+      <span class="chip" id="chipLlm"><span class="dot"></span>LLM</span>
+      <span class="chip" id="chipMem"><span class="dot"></span>记忆</span>
+      <span class="chip" id="chipFss"><span class="dot"></span>知识库 · 内置</span>
+      <button class="btn-icon" id="btnTheme" title="切换暗/亮主题">
+        <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button class="btn-ghost" id="btnDocs">接口文档</button>
+    </div>
+
+    <div class="messages" id="messages">
+      <!-- 欢迎页（无消息时显示） -->
+      <div class="welcome" id="welcome">
+        <div class="welcome-title">你好，我是 <span class="hl">FoodAgent</span> 智能餐饮助手</div>
+        <div class="welcome-sub">
+          基于 LangGraph 状态图编排 3 个专业 Agent，覆盫 点餐 → 后厨 → 评价 全链路餐饮场景。
+        </div>
+
+        <div class="side-label" style="padding:0 0 10px">快捷开始</div>
+        <div class="quick-grid" id="quickGrid"></div>
+
+        <div class="side-label" style="padding:0 0 10px">系统能力</div>
+        <div class="cap-grid" id="capGrid"></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="composer-box">
+          <textarea id="input" rows="1" placeholder="输入您的需求，例如：帮我推荐适合10人聚餐的套餐，有两位素食…"></textarea>
+          <button class="btn-send" id="btnSend" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="composer-tip">
+          <span>Enter 发送 · Shift+Enter 换行</span>
+          <span id="threadTip"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ 登录弹层 ============ -->
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/>
+        <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>
+      </svg>
+    </div>
+    <h2>登录 FoodAgent</h2>
+    <div class="sub">门店员工工号登录 · JWT 认证</div>
+
+    <div class="field">
+      <label>门店工号</label>
+      <input id="loginUser" value="waiter_01" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="loginPass" type="password" value="123456" autocomplete="current-password">
+    </div>
+    <button class="btn-login" id="btnLogin">登 录</button>
+    <div class="login-err" id="loginErr"></div>
+
+    <div class="demo-hint">
+      <b>演示账号（点击填充，密码均为 123456）</b>
+      <div class="demo-acc" data-u="waiter_01"><span>waiter_01</span><span>服务员</span></div>
+      <div class="demo-acc" data-u="kitchen_01"><span>kitchen_01</span><span>后厨主管</span></div>
+      <div class="demo-acc" data-u="manager_01"><span>manager_01</span><span>店长</span></div>
+      <div class="demo-acc" data-u="waiter_02"><span>waiter_02</span><span>服务员（store_002）</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   FoodAgent 前端 · 单文件实现
+   与后端 api/routes.py 的 18 个接口对接：
+     auth/login · auth/me · tasks · chat · chat/stream(SSE) · agents · tools
+     intents · config · health · memory/preferences · ...
+   ================================================================ */
+
+const $ = (id) => document.getElementById(id);
+const API = "";   // 同源部署，无需前缀
+
+/* ---------- 全局状态 ---------- */
+const S = {
+  token: localStorage.getItem("fa_token") || "",
+  user: null,
+  // 记住上次停留的会话，刷新页面后能自动回到原会话
+  threadId: localStorage.getItem("fa_active_thread") || null,
+  tasks: JSON.parse(localStorage.getItem("fa_tasks") || "[]"),
+  streaming: false,
+  configCache: null,
+  // 当前会话已渲染的消息快照（含用户消息与 Agent 最终回答），
+  // 随任务切换写入/读出 localStorage["fa_threads"]，实现历史会话回看。
+  msgs: [],
+};
+
+/* ---------- 会话消息持久化 ----------
+   存储结构（localStorage["fa_threads"]，按 threadId 分桶）：
+     {
+       "task_ab12cd": [
+         { role:"user",  name:"张三", html:"…" },
+         { role:"agent", name:"FoodAgent", html:"…",
+           tags:[{text,cls}], stages:[{text,state}], meta:{…} }
+       ],
+       ...
+     }
+   仅存「渲染所需的最终数据」，不存 DOM；回看时重放即可。
+   上限设定：每个会话最多 200 条消息、最多保留 30 个会话，
+   防止 localStorage 被长对话撑爆（超限时淘汰最旧的会话）。
+*/
+const THREAD_STORE_KEY = "fa_threads";
+const MAX_THREADS = 30;          // 最多保留多少个会话
+const MAX_MSGS_PER_THREAD = 200; // 单个会话最多保留多少条消息
+
+function loadThreads() {
+  try { return JSON.parse(localStorage.getItem(THREAD_STORE_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function saveThreads(all) {
+  try {
+    localStorage.setItem(THREAD_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    // 配额超限：丢掉最旧的若干个会话后重试一次
+    console.warn("会话存储写入失败，尝试清理旧会话", e);
+    const ids = Object.keys(all);
+    ids.sort((a, b) => (threadTs(b) - threadTs(a)));
+    ids.slice(Math.max(1, Math.floor(MAX_THREADS / 2)))
+       .forEach(id => delete all[id]);
+    try { localStorage.setItem(THREAD_STORE_KEY, JSON.stringify(all)); }
+    catch (e2) { console.warn("清理后仍写入失败（忽略）", e2); }
+  }
+}
+
+function threadTs(id) {
+  const t = (S.tasks || []).find(x => x.id === id);
+  return t ? (t.ts || 0) : 0;
+}
+
+/** 当前会话的消息快照落盘 */
+function saveMsgs() {
+  if (!S.threadId) return;
+  const all = loadThreads();
+  all[S.threadId] = S.msgs.slice(-MAX_MSGS_PER_THREAD);
+  // 控制会话总数：按任务时间戳淘汰最旧的
+  const ids = Object.keys(all);
+  if (ids.length > MAX_THREADS) {
+    ids.sort((a, b) => threadTs(b) - threadTs(a));
+    ids.slice(MAX_THREADS).forEach(id => delete all[id]);
+  }
+  saveThreads(all);
+}
+
+function readMsgs(threadId) {
+  const all = loadThreads();
+  return Array.isArray(all[threadId]) ? all[threadId] : [];
+}
+
+/** 记住「当前停留的会话」，刷新页面后据此恢复 */
+function setActiveThread(id) {
+  S.threadId = id;
+  // 切会话必须重置消息累积器，否则新会话会把上一个会话的消息一起写进去
+  S.msgs = id ? readMsgs(id) : [];
+  try {
+    if (id) localStorage.setItem("fa_active_thread", id);
+    else localStorage.removeItem("fa_active_thread");
+  } catch { /* 忽略隐私模式等写入失败 */ }
+}
+
+/** 删除某会话的消息（清理历史任务时同步删） */
+function dropMsgs(threadId) {
+  const all = loadThreads();
+  if (threadId in all) { delete all[threadId]; saveThreads(all); }
+}
+
+/* ================================================================
+   一、HTTP 工具
+   ================================================================ */
+async function api(path, {method = "GET", body = null, auth = true} = {}) {
+  const headers = {"Content-Type": "application/json"};
+  if (auth && S.token) headers["Authorization"] = "Bearer " + S.token;
+  const opts = {method, headers};
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const text = await res.text();
+  let data;
+  try { data = text ? JSON.parse(text) : {}; } catch { data = {detail: text}; }
+  if (!res.ok) {
+    const msg = data.detail || data.message || ("请求失败 " + res.status);
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  if (data && data.ok === false) throw new Error(data.detail || "业务处理失败");
+  return data;
+}
+
+/* ================================================================
+   二、Markdown 轻量渲染（无外部依赖，防 XSS）
+   ================================================================ */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]
+  ));
+}
+
+function renderMarkdown(md) {
+  if (!md) return "";
+  let text = escapeHtml(md);
+
+  // 1) 代码块 ```lang ... ```
+  const codeBlocks = [];
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    codeBlocks.push(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`);
+    return `\u0000CB${codeBlocks.length - 1}\u0000`;
+  });
+
+  // 2) 表格
+  text = text.replace(/(^\|.+\|\s*\n\|[\s:|-]+\|\s*\n(?:\|.*\|\s*\n?)*)/gm, (block) => {
+    const rows = block.trim().split("\n").filter(Boolean);
+    if (rows.length < 2) return block;
+    const parse = (r) => r.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+    const head = parse(rows[0]);
+    const bodyRows = rows.slice(2).map(parse);
+    let html = "<table><thead><tr>" + head.map(h => `<th>${h}</th>`).join("") + "</tr></thead><tbody>";
+    html += bodyRows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("");
+    return html + "</tbody></table>";
+  });
+
+  // 3) 引用块
+  text = text.replace(/^&gt;\s?(.*)$/gm, "<blockquote><p>$1</p></blockquote>");
+  text = text.replace(/<\/blockquote>\n<blockquote>/g, "\n");
+
+  // 4) 标题
+  text = text.replace(/^######\s+(.*)$/gm, "<h3>$1</h3>")
+             .replace(/^#####\s+(.*)$/gm, "<h3>$1</h3>")
+             .replace(/^####\s+(.*)$/gm, "<h3>$1</h3>")
+             .replace(/^###\s+(.*)$/gm, "<h3>$1</h3>")
+             .replace(/^##\s+(.*)$/gm, "<h2>$1</h2>")
+             .replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+
+  // 5) 分隔线
+  text = text.replace(/^(---|\*\*\*|___)\s*$/gm, "<hr>");
+
+  // 6) 列表
+  text = text.replace(/(?:^|\n)((?:\s*[-*+]\s+.*(?:\n|$))+)/g, (m, list) => {
+    const items = list.trim().split("\n").map(l => l.replace(/^\s*[-*+]\s+/, ""));
+    return "\n<ul>" + items.map(i => `<li>${i}</li>`).join("") + "</ul>";
+  });
+  text = text.replace(/(?:^|\n)((?:\s*\d+\.\s+.*(?:\n|$))+)/g, (m, list) => {
+    const items = list.trim().split("\n").map(l => l.replace(/^\s*\d+\.\s+/, ""));
+    return "\n<ol>" + items.map(i => `<li>${i}</li>`).join("") + "</ol>";
+  });
+
+  // 7) 行内
+  text = text.replace(/`([^`\n]+)`/g, "<code>$1</code>")
+             .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+             .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>")
+             .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // 8) 段落
+  text = text.split(/\n{2,}/).map(p => {
+    const t = p.trim();
+    if (!t) return "";
+    if (/^<(h1|h2|h3|ul|ol|pre|blockquote|hr|table)/.test(t)) return t;
+    return "<p>" + t.replace(/\n/g, "<br>") + "</p>";
+  }).join("\n");
+
+  // 9) 还原代码块
+  text = text.replace(/\u0000CB(\d+)\u0000/g, (_, i) => codeBlocks[Number(i)]);
+  return text;
+}
+
+/* ================================================================
+   三、图标（内联 SVG，无 emoji）
+   ================================================================ */
+const ICONS = {
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  bot: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3"/><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="14" r="1.2"/><circle cx="15" cy="14" r="1.2"/></svg>',
+  utensils: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>',
+  box: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  trend: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>',
+};
+
+/* ================================================================
+   四、DOM 渲染
+   ================================================================ */
+const messagesEl = $("messages");
+const welcomeEl = $("welcome");
+
+function scrollBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function hideWelcome() {
+  if (welcomeEl && !welcomeEl.classList.contains("hidden"))
+    welcomeEl.classList.add("hidden");
+}
+
+/** 添加一条消息，返回其 body 元素（供流式写入） */
+function addMessage(role, {name = "", html = ""} = {}) {
+  hideWelcome();
+  const wrap = document.createElement("div");
+  wrap.className = "msg-wrap";
+  const msg = document.createElement("div");
+  msg.className = "msg " + role;
+  const time = new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"});
+  msg.innerHTML = `
+    <div class="msg-avatar">${role === "user" ? ICONS.user : ICONS.bot}</div>
+    <div class="msg-body">
+      <div class="msg-head">
+        <span class="msg-name">${escapeHtml(name || (role === "user" ? "我" : "FoodAgent"))}</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="tags"></div>
+      <div class="stages"></div>
+      <div class="bubble-wrap">
+        <div class="bubble">${html}</div>
+        ${role === "agent" ? '<button class="btn-copy" title="复制内容">复制</button>' : ""}
+      </div>
+    </div>`;
+  wrap.appendChild(msg);
+  messagesEl.appendChild(wrap);
+  scrollBottom();
+
+  const el = {
+    root: msg,
+    tags: msg.querySelector(".tags"),
+    stages: msg.querySelector(".stages"),
+    bubble: msg.querySelector(".bubble"),
+    wrap,
+  };
+
+  // 复制按钮：拷贝气泡纯文本（去掉 Markdown 标签）
+  const copyBtn = msg.querySelector(".btn-copy");
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(el.bubble.innerText);
+        copyBtn.textContent = "已复制";
+        copyBtn.classList.add("copied");
+        setTimeout(() => { copyBtn.textContent = "复制"; copyBtn.classList.remove("copied"); }, 1500);
+      } catch { /* 剪贴板不可用（如非 HTTPS）则忽略 */ }
+    };
+  }
+
+  return el;
+}
+
+function addTag(el, text, cls = "intent") {
+  const span = document.createElement("span");
+  span.className = "tag " + cls;
+  span.textContent = text;
+  el.tags.appendChild(span);
+}
+
+function addStage(el, text, state = "run") {
+  const span = document.createElement("span");
+  span.className = "stage " + state;
+  span.innerHTML = (state === "run" ? '<span class="spinner"></span>' : "") + escapeHtml(text);
+  el.stages.appendChild(span);
+  return span;
+}
+
+/** 人工确认卡片 */
+function addConfirmCard(el, pending, token, threadId) {
+  const card = document.createElement("div");
+  card.className = "confirm-card";
+  const isKitchen = pending.type === "kitchen_priority_confirm";
+  card.innerHTML = `
+    <h4>${ICONS.alert} 需要人工确认</h4>
+    <p>${escapeHtml(pending.message || "")}</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm">${isKitchen ? "确认排产方案" : "确认回复内容"}</button>
+      <button class="btn-cancel">稍后处理</button>
+    </div>`;
+  el.bubble.appendChild(card);
+  card.querySelector(".btn-confirm").onclick = () => {
+    card.remove();
+    sendMessage(isKitchen ? "已确认后厨排产方案，请继续执行" : "已确认差评回复，请继续执行",
+                {human_confirmed: isKitchen, manager_confirmed: !isKitchen});
+  };
+  card.querySelector(".btn-cancel").onclick = () => card.remove();
+  scrollBottom();
+}
+
+/** 结果元信息面板 */
+function addMetaPanel(el, res) {
+  const parts = [];
+  if (res.intents && res.intents.length)
+    parts.push(`<span>意图：<b>${res.intents.join(" / ")}</b></span>`);
+  if (res.agents_invoked && res.agents_invoked.length)
+    parts.push(`<span>Agent：<b>${res.agents_invoked.join(" → ")}</b></span>`);
+  if (res.order_id) parts.push(`<span>订单号：<b>${escapeHtml(res.order_id)}</b></span>`);
+  if (res.processing_time) parts.push(`<span>耗时：<b>${res.processing_time}s</b></span>`);
+  if (res.thread_id) parts.push(`<span>任务：<b>${escapeHtml(String(res.thread_id).slice(0, 18))}</b></span>`);
+  if (!parts.length) return;
+  const p = document.createElement("div");
+  p.className = "meta-panel";
+  p.innerHTML = parts.join("");
+  el.bubble.appendChild(p);
+}
+
+/** 从元信息快照重建 meta-panel（回看历史会话时用） */
+function replayMetaPanel(el, meta) {
+  if (!meta) return;
+  addMetaPanel(el, meta);
+}
+
+/* ================================================================
+   四·五、会话回看：按快照重放消息
+   ================================================================ */
+
+/** 清空消息区并回到欢迎页 */
+function showWelcome() {
+  messagesEl.innerHTML = "";
+  messagesEl.appendChild(welcomeEl);
+  welcomeEl.classList.remove("hidden");
+}
+
+/**
+ * 渲染一个会话的快照到消息区。
+ * 快照结构见 saveMsgs() 的注释；这里只做「重建」，不做任何网络请求。
+ */
+function renderThread(threadId) {
+  S.msgs = readMsgs(threadId);
+  showWelcome();
+  if (!S.msgs.length) return;
+
+  for (const m of S.msgs) {
+    const el = addMessage(m.role, {name: m.name, html: m.html || ""});
+    // 重放标签
+    (m.tags || []).forEach(t => addTag(el, t.text, t.cls || "intent"));
+    // 重放阶段（历史阶段一律显示为已完成）
+    (m.stages || []).forEach(s => {
+      const span = addStage(el, s.text, "done");
+      span.className = "stage done";
+    });
+    // 重放元信息
+    replayMetaPanel(el, m.meta);
+  }
+  scrollBottom();
+}
+
+/** 记录一条消息快照（在消息渲染完成时调用） */
+function pushMsg(rec) {
+  S.msgs.push(rec);
+  if (S.msgs.length > MAX_MSGS_PER_THREAD)
+    S.msgs = S.msgs.slice(-MAX_MSGS_PER_THREAD);
+  saveMsgs();
+}
+
+/* ================================================================
+   五、登录
+   ================================================================ */
+async function doLogin() {
+  const btn = $("btnLogin");
+  const err = $("loginErr");
+  const username = $("loginUser").value.trim();
+  const password = $("loginPass").value;
+  if (!username || !password) { err.textContent = "请输入工号与密码"; return; }
+
+  btn.disabled = true; btn.textContent = "登录中..."; err.textContent = "";
+  try {
+    const res = await api("/api/auth/login", {
+      method: "POST", body: {username, password}, auth: false,
+    });
+    S.token = res.access_token;
+    S.user = res.user;
+    localStorage.setItem("fa_token", S.token);
+    onLoginSuccess();
+  } catch (e) {
+    err.textContent = e.message || "登录失败";
+  } finally {
+    btn.disabled = false; btn.textContent = "登 录";
+  }
+}
+
+function onLoginSuccess() {
+  $("loginMask").classList.add("hidden");
+  $("sideFooter").style.display = "block";
+  const u = S.user || {};
+  $("userAvatar").textContent = (u.name || u.user_id || "--").slice(0, 2);
+  $("userName").textContent = u.name || u.user_id || "--";
+  const roleMap = {waiter: "服务员", kitchen: "后厨主管", manager: "店长"};
+  $("userRole").textContent = (roleMap[u.role] || u.role || "--") + " · " + (u.tenant_id || "");
+  renderTasks();
+  checkHealth();
+  loadWelcome();   // 按当前角色刷新快捷问题（登录后 role 才确定）
+  // 优先恢复上次停留的会话（须仍存在于任务列表中，且确有消息记录）；否则开新任务
+  const lastId = S.threadId;
+  const last = lastId ? S.tasks.find(t => t.id === lastId) : null;
+  if (last && readMsgs(last.id).length) {
+    $("chatTitle").textContent = last.title || "任务";
+    $("threadTip").textContent = "任务 " + last.id.slice(-8);
+    renderThread(last.id);
+  } else {
+    newTask(false);
+  }
+}
+
+async function checkHealth() {
+  try {
+    const h = await api("/api/health", {auth: false});
+    const set = (id, ok, label) => {
+      const el = $(id);
+      el.className = "chip " + (ok ? "ok" : "warn");
+      el.innerHTML = `<span class="dot"></span>${label}`;
+    };
+    const d = h.dependencies || {};
+    const llm = d.llm || {};
+    set("chipLlm", !!llm.available, llm.available ? "LLM 就绪" : "LLM 降级");
+    set("chipMem", d.checkpointer && d.checkpointer !== "none", "记忆 " + (d.checkpointer || "-"));
+    // 知识层状态：食安法规 / 菜品 / 营养知识为项目内置，随服务启动即在线；
+    // 这里同时展示「是否已切到备用模型」，便于观察 LLM 主模型是否降级。
+    const fbOn = !!llm.using_fallback;
+    set("chipFss", true, fbOn ? "知识库 · 内置（备用模型）" : "知识库 · 内置");
+  } catch (e) {
+    console.warn("健康检查失败", e);
+  }
+}
+
+/* ================================================================
+   六、任务管理
+   ================================================================ */
+function newTask(push = true) {
+  setActiveThread("task_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  $("chatTitle").textContent = "新任务";
+  $("threadTip").textContent = "任务 " + S.threadId.slice(-8);
+  // 清空消息区，恢复欢迎页（并重置当前会话的消息快照）
+  S.msgs = [];
+  showWelcome();
+  if (push) {
+    S.tasks.unshift({id: S.threadId, title: "新任务", ts: Date.now()});
+    S.tasks = S.tasks.slice(0, 20);
+    saveTasks();
+    renderTasks();
+  }
+  $("input").focus();
+}
+
+function saveTasks() {
+  localStorage.setItem("fa_tasks", JSON.stringify(S.tasks));
+}
+
+function renderTasks() {
+  const el = $("taskList");
+  if (!S.tasks.length) {
+    el.innerHTML = '<div class="task-item" style="color:var(--text-mute);cursor:default">暂无历史任务</div>';
+    return;
+  }
+  el.innerHTML = S.tasks.map(t => `
+    <div class="task-item ${t.id === S.threadId ? "active" : ""}" data-id="${escapeHtml(t.id)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>${escapeHtml(t.title)}
+    </div>`).join("");
+  el.querySelectorAll(".task-item[data-id]").forEach(node => {
+    node.onclick = () => {
+      const id = node.dataset.id;
+      if (id === S.threadId) return;          // 点当前会话，无需切换
+      if (S.streaming) return;                // 生成中不切换，避免串台
+      setActiveThread(id);
+      $("chatTitle").textContent = S.tasks.find(t => t.id === id)?.title || "任务";
+      $("threadTip").textContent = "任务 " + id.slice(-8);
+      renderThread(id);                       // ← 回放该会话的历史消息
+      renderTasks();
+      closeSidebar();                         // 移动端选择会话后收起抽屉
+    };
+  });
+}
+
+/* ================================================================
+   七、核心：发送消息（SSE 流式）
+   ================================================================ */
+async function sendMessage(text, extra = {}) {
+  if (S.streaming) return;
+  text = (text || "").trim();
+  if (!text) return;
+
+  hideWelcome();
+  addMessage("user", {name: S.user?.name || "我", html: renderMarkdown(text)});
+  // 记录用户消息到会话快照（供历史回看时重放）
+  pushMsg({role: "user", name: S.user?.name || "我", html: renderMarkdown(text)});
+
+  // 更新任务标题。
+  // 注意：页面初始化时 newTask(false) 不把当前任务写进 S.tasks，
+  // 所以首次发消息时 tasks 里往往找不到当前 threadId —— 此时要补插一条，
+  // 否则历史列表会永远留下一条没被命名的「新任务」。
+  const title = text.slice(0, 14);
+  let task = S.tasks.find(t => t.id === S.threadId);
+  if (!task) {
+    // 当前会话尚未登记 → 用本次输入补建任务条目
+    task = {id: S.threadId, title, ts: Date.now()};
+    S.tasks.unshift(task);
+    S.tasks = S.tasks.slice(0, 20);
+    $("chatTitle").textContent = task.title;
+    saveTasks(); renderTasks();
+  } else if (task.title === "新任务") {
+    // 已在列表中但仍是占位标题 → 用首条消息命名
+    task.title = title;
+    task.ts = Date.now();
+    $("chatTitle").textContent = task.title;
+    saveTasks(); renderTasks();
+  }
+
+  $("input").value = "";
+  autoResize();
+  setStreaming(true);
+
+  const el = addMessage("agent", {name: "FoodAgent", html: ""});
+  el.bubble.innerHTML = '<span class="cursor-blink"></span>';
+
+  const params = new URLSearchParams({
+    query: text,
+    thread_id: S.threadId || "",
+    token: S.token,
+    human_confirmed: extra.human_confirmed ? "true" : "false",
+    manager_confirmed: extra.manager_confirmed ? "true" : "false",
+  });
+
+  let answerBuf = "";
+  let gotResult = false;
+  const stageMap = {};
+  // 本轮的「渲染快照」：边流式边累积，结束后一次性落盘，供历史回看重放
+  const rec = {role: "agent", name: "FoodAgent", html: "", tags: [], stages: [], meta: null};
+  const stageOrder = [];
+
+  try {
+    await streamSSE("/api/chat/stream?" + params.toString(), {
+      intent(ev) {
+        if (ev.intents && ev.intents.length) {
+          ev.intents.forEach((i, k) => {
+            const t = (k ? "" : "意图 ") + i;
+            addTag(el, t, "intent");
+            rec.tags.push({text: t, cls: "intent"});
+          });
+          if (ev.is_pipeline) { addTag(el, "多 Agent 串联", "pipeline"); rec.tags.push({text: "多 Agent 串联", cls: "pipeline"}); }
+          if (ev.reason) { addTag(el, ev.reason, "intent"); rec.tags.push({text: ev.reason, cls: "intent"}); }
+        }
+      },
+      stage(ev) {
+        const key = ev.agent || ev.title;
+        const label = ev.title || ev.agent;
+        if (stageMap[key]) { stageMap[key].className = "stage done"; stageMap[key].querySelector(".spinner")?.remove(); return; }
+        stageMap[key] = addStage(el, label, "run");
+        stageOrder.push(label);
+        rec.stages = stageOrder.map(t => ({text: t, state: "done"}));
+      },
+      token(ev) {
+        answerBuf += (ev.token || "");
+        el.bubble.innerHTML = renderMarkdown(answerBuf) + '<span class="cursor-blink"></span>';
+        scrollBottom();
+      },
+      result(ev) {
+        gotResult = true;
+        Object.values(stageMap).forEach(s => {
+          s.className = "stage done"; s.querySelector(".spinner")?.remove();
+        });
+        const risk = ev.allergen_risk || "none";
+        if (risk === "high") { addTag(el, "过敏原高风险", "risk-high"); rec.tags.push({text: "过敏原高风险", cls: "risk-high"}); }
+        else if (risk === "medium" || risk === "mid") { addTag(el, "过敏原中风险", "risk-mid"); rec.tags.push({text: "过敏原中风险", cls: "risk-mid"}); }
+        else if (ev.allergen_result && ev.allergen_result.has_allergen) {
+          addTag(el, "过敏原已标注", "risk-ok"); rec.tags.push({text: "过敏原已标注", cls: "risk-ok"});
+        }
+        if (ev.degraded_tools && ev.degraded_tools.length) {
+          const t = "降级工具 " + ev.degraded_tools.length + " 个";
+          addTag(el, t, "degraded"); rec.tags.push({text: t, cls: "degraded"});
+        }
+
+        if (ev.pending_actions && ev.pending_actions.length)
+          ev.pending_actions.forEach(p => addConfirmCard(el, p, S.token, S.threadId));
+        addMetaPanel(el, ev);
+        // 记录元信息（与 addMetaPanel 读取的字段保持一致）
+        rec.meta = {
+          intents: ev.intents, agents_invoked: ev.agents_invoked,
+          order_id: ev.order_id, processing_time: ev.processing_time,
+          thread_id: ev.thread_id,
+        };
+      },
+      error(ev) {
+        el.bubble.innerHTML = `<p style="color:var(--danger)">处理出错：${escapeHtml(ev.message || "未知错误")}</p>`;
+        rec.error = ev.message || "未知错误";
+      },
+    });
+
+    if (!gotResult) {
+      el.bubble.innerHTML = renderMarkdown(answerBuf || "（无返回内容）");
+    } else {
+      el.bubble.querySelector(".cursor-blink")?.remove();
+    }
+  } catch (e) {
+    el.bubble.innerHTML = `<p style="color:var(--danger)">连接失败：${escapeHtml(e.message)}</p>`;
+    rec.error = e.message;
+  } finally {
+    // 落盘本轮 Agent 回答（用最终渲染出的 HTML，保证回看时与当时一致）
+    rec.html = el.bubble.innerHTML;
+    pushMsg(rec);
+    setStreaming(false);
+    scrollBottom();
+  }
+}
+
+/** SSE 流式读取（fetch + ReadableStream，支持自定义 Header 场景下的 query token） */
+async function streamSSE(url, handlers) {
+  const res = await fetch(API + url, {
+    headers: {"Accept": "text/event-stream"},
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error("HTTP " + res.status + " " + t.slice(0, 120));
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, {stream: true});
+    const frames = buf.split("\n\n");
+    buf = frames.pop();
+    for (const frame of frames) {
+      let eventType = "message", data = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) eventType = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (eventType === "done") return;
+      if (!data) continue;
+      let payload;
+      try { payload = JSON.parse(data); } catch { payload = {token: data}; }
+      handlers[eventType]?.(payload);
+    }
+  }
+}
+
+function setStreaming(v) {
+  S.streaming = v;
+  $("btnSend").disabled = v || !$("input").value.trim();
+}
+
+/* ================================================================
+   八、欢迎页内容
+   ================================================================ */
+async function loadWelcome() {
+  // 快捷问题：优先按登录角色的专属语句，取不到再退回通用列表
+  let quick = [], caps = [];
+  let cfg = {};
+  try {
+    cfg = await api("/api/config", {auth: false});
+  } catch { cfg = {}; }
+
+  const role = S.user?.role || "";
+  const byRole = cfg.quick_by_role || {};
+  if (role && Array.isArray(byRole[role]) && byRole[role].length) {
+    quick = byRole[role];                       // ← 该角色的专属完整语句
+  } else if (Array.isArray(cfg.quick_questions) && cfg.quick_questions.length) {
+    quick = cfg.quick_questions;                // ← 通用列表兜底（未登录/未知角色）
+  }
+
+  if (!quick.length) {
+    quick = [
+      {icon: "utensils", text: "推荐今日招牌", prompt: "帮我推荐今天的招牌菜组合"},
+      {icon: "clock", text: "查看后厨排队", prompt: "现在后厨有多少单在排队，帮我安排出餐顺序"},
+      {icon: "chart", text: "分析本周评价", prompt: "帮我分析一下本周的顾客评价"},
+    ];
+  }
+  $("quickGrid").innerHTML = quick.map(q => `
+    <button class="quick-card" data-p="${escapeHtml(q.prompt)}">
+      <div class="quick-icon">${ICONS[q.icon] || ICONS.utensils}</div>
+      <div>
+        <div class="qt">${escapeHtml(q.text)}</div>
+        <div class="qd">${escapeHtml(q.prompt)}</div>
+      </div>
+    </button>`).join("");
+  $("quickGrid").querySelectorAll(".quick-card").forEach(b => {
+    b.onclick = () => sendMessage(b.dataset.p);
+  });
+
+  // 能力面板
+  try {
+    const [agents, tools, intents] = await Promise.all([
+      api("/api/agents", {auth: false}),
+      api("/api/tools", {auth: false}),
+      api("/api/intents", {auth: false}),
+    ]);
+    caps = [
+      {num: agents.total_agents || 4, lbl: "专业 Agent", sub: (agents.agents || []).map(a => a.name).join(" · ")},
+      {num: agents.total_nodes || 33, lbl: "状态图节点", sub: "LangGraph StateGraph"},
+      {num: tools.total || 15, lbl: "工具", sub: "LLM 4 · 规则 4 · MCP 4 · API 3"},
+      {num: intents.total || 9, lbl: "意图类型", sub: "点餐 / 后厨 / 评价 / 食安"},
+    ];
+  } catch {
+    caps = [
+      {num: 4, lbl: "专业 Agent", sub: "Order · Kitchen · Review · Safety"},
+      {num: 33, lbl: "状态图节点", sub: "LangGraph StateGraph"},
+      {num: 15, lbl: "工具", sub: "LLM 4 · 规则 4 · MCP 4 · API 3"},
+      {num: 9, lbl: "意图类型", sub: "点餐 / 后厨 / 评价 / 食安"},
+    ];
+  }
+  $("capGrid").innerHTML = caps.map(c => `
+    <div class="cap-card">
+      <div class="num">${escapeHtml(String(c.num))}</div>
+      <div class="lbl">${escapeHtml(c.lbl)}</div>
+      <div class="sub">${escapeHtml(c.sub)}</div>
+    </div>`).join("");
+}
+
+/* ================================================================
+   九、交互绑定
+   ================================================================ */
+function autoResize() {
+  const ta = $("input");
+  ta.style.height = "auto";
+  ta.style.height = Math.min(ta.scrollHeight, 150) + "px";
+}
+
+$("input").addEventListener("input", () => {
+  autoResize();
+  $("btnSend").disabled = S.streaming || !$("input").value.trim();
+});
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (!$("btnSend").disabled) sendMessage($("input").value);
+  }
+});
+$("btnSend").onclick = () => sendMessage($("input").value);
+$("btnNewTask").onclick = () => newTask(true);
+$("btnLogin").onclick = doLogin;
+$("loginPass").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+$("loginUser").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginPass").focus(); });
+$("btnDocs").onclick = () => window.open("/docs", "_blank");
+
+/* ---------- 主题切换（暗/亮，持久化） ---------- */
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const light = theme === "light";
+  $("iconMoon").style.display = light ? "none" : "";
+  $("iconSun").style.display = light ? "" : "none";
+}
+$("btnTheme").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+  localStorage.setItem("fa_theme", cur);
+  applyTheme(cur);
+};
+
+/* ---------- 移动端侧边栏抽屉 ---------- */
+function closeSidebar() {
+  document.querySelector(".sidebar").classList.remove("open");
+  $("sidebarBackdrop").classList.remove("show");
+}
+$("btnMenu").onclick = () => {
+  document.querySelector(".sidebar").classList.add("open");
+  $("sidebarBackdrop").classList.add("show");
+};
+$("sidebarBackdrop").onclick = closeSidebar;
+
+/* 启动时恢复主题 */
+applyTheme(localStorage.getItem("fa_theme") || "dark");
+
+$("btnLogout").onclick = () => {
+  localStorage.removeItem("fa_token");
+  S.token = ""; S.user = null;
+  $("loginMask").classList.remove("hidden");
+};
+
+document.querySelectorAll(".demo-acc").forEach(el => {
+  el.onclick = () => { $("loginUser").value = el.dataset.u; $("loginPass").value = "123456"; };
+});
+
+/* ================================================================
+   十、启动
+   ================================================================ */
+(async function boot() {
+  if (S.token) {
+    // 先校验已有 Token 是否仍有效，拿到用户（含 role）后再加载欢迎页，
+    // 否则快捷问题会因 S.user 尚未就绪而退回通用列表。
+    try {
+      const me = await api("/api/auth/me");
+      S.user = me.user;
+      onLoginSuccess();   // 内部会按角色加载欢迎页内容
+      return;
+    } catch { S.token = ""; localStorage.removeItem("fa_token"); }
+  }
+  // 未登录：先用通用列表渲染欢迎页（登录成功后会按角色重新加载）
+  await loadWelcome();
+  $("loginMask").classList.remove("hidden");
+  $("loginUser").focus();
+})();
+</script>
+</body>
+</html>

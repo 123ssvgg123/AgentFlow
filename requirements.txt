@@ -1,0 +1,71 @@
+# ============================================================
+#  FoodAgent AI 智能餐饮 Agent 系统 · 依赖清单
+#  Python >= 3.10
+# ============================================================
+
+# ---------- Web 框架 ----------
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+
+# ---------- LangGraph Agent 编排 ----------
+# 有依赖时使用 LangGraph StateGraph 执行；无依赖时自动降级为顺序执行器
+langgraph>=0.2.0
+langchain-core>=0.3.0
+# PostgreSQL Checkpointer（PG_ENABLED=true 时启用）
+langgraph-checkpoint-postgres>=2.0.0
+
+# ---------- 大模型调用（DeepSeek 走 OpenAI 兼容协议）----------
+openai>=1.30.0
+httpx>=0.27.0
+
+# ---------- 数据库 ----------
+# PostgreSQL 驱动（psycopg3）；未安装时长期记忆自动降级为 JSON 文件
+psycopg[binary]>=3.1.0
+
+# ---------- 认证 ----------
+PyJWT>=2.8.0
+
+# ---------- 配置与日志 ----------
+python-dotenv>=1.0.0
+
+# ---------- 可选：向量检索（未安装时 MCP 工具走本地知识库）----------
+# pymilvus>=2.4.0
+
+# ============================================================
+# 可选重型组件（渐进增强，默认全部关闭）
+# ============================================================
+# 说明：这四类依赖都是**可选增强**。未安装 / 未开启对应开关时，
+#      全部 API 为 no-op，主流程（意图路由 → 三 Agent → 记忆）100% 可跑通。
+#      因此不锁版本，用 >= 宽松约束；只跑业务的话可以整段跳过。
+#      详细启用步骤见 docs/OBSERVABILITY.md。
+#
+# 当前 system 环境实测版本：langsmith 0.14.8 / redis 8.1.0 /
+#                          prometheus-client 0.26.0 / locust 2.46.0
+
+# ---------- LangSmith 全链路追踪 ----------
+# tools/tracing.py：树状 trace（请求 → Agent → 节点 → LLM/工具调用）。
+# 未装时 traceable 退化为恒等装饰器，零开销。
+langsmith>=0.14.0
+
+# ---------- Redis 缓存 ----------
+# tools/cache.py：门店偏好/顾客画像/MCP 检索结果热点缓存。
+# 未装或连接失败时自动降级为进程内字典缓存（单机可用，重启失效）。
+redis>=5.0.0
+
+# ---------- Prometheus 指标 ----------
+# tools/metrics.py：暴露 GET /metrics（请求数/耗时/Agent 阶段/工具降级/LLM 调用）。
+# 未装时所有记录函数为 no-op。
+prometheus-client>=0.20.0
+
+# ---------- Locust 并发压测 ----------
+# scripts/locustfile.py：仅压测时需要，业务运行不需要。
+locust>=2.30.0
+
+# ============================================================
+# 可选：RAGAS 评估
+# ============================================================
+# 本服务自身不做 RAGAS 评估（评估在 FoodSafetySystem/scripts/evaluate_ragas.py）。
+# 这里仅作说明，无需安装。
+# ragas>=0.1.0
