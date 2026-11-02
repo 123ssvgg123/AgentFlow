@@ -1,0 +1,249 @@
+{
+  "pack_id": "catering",
+  "display_name": "连锁餐饮（门店全链路）",
+  "version": "1.0.0",
+  "status": "reference",
+  "description": "平台的能力验证场景：单一对话入口覆盖「点餐 → 后厨 → 评价 → 食安问答」，把必须 100% 准确的判定（过敏原、价格、库存、优先级）从模型手里拿回规则引擎。该场景之所以被选为 reference，是因为它同时具备三个平台必须要处理的问题：不可错的判定、有副作用的写操作、跨 Agent 的诉求切换。",
+  "entrypoints": {
+    "orchestrator": "agents.orchestrator",
+    "state": "agents.state",
+    "tools": "tools.registry",
+    "api": "api.app"
+  },
+  "agents": [
+    {
+      "id": "order",
+      "name": "OrderAgent 智能点餐",
+      "graph_module": "agents.order.graph",
+      "node_count": 10,
+      "intents": ["dish_recommend", "smart_order", "allergen_query"]
+    },
+    {
+      "id": "kitchen",
+      "name": "KitchenAgent 后厨调度",
+      "graph_module": "agents.kitchen.graph",
+      "node_count": 7,
+      "intents": ["kitchen_dispatch", "inventory_check"]
+    },
+    {
+      "id": "review",
+      "name": "ReviewAgent 评价分析",
+      "graph_module": "agents.review.graph",
+      "node_count": 7,
+      "intents": ["review_analysis", "improvement_advice"]
+    },
+    {
+      "id": "safety",
+      "name": "SafetyAgent 食安问答",
+      "graph_module": "agents.safety.graph",
+      "node_count": 9,
+      "intents": ["food_safety_query", "nutrition_query"]
+    }
+  ],
+  "intents": [
+    {"id": "dish_recommend", "agent": "order", "complex": false, "desc": "菜品推荐"},
+    {"id": "smart_order", "agent": "order", "complex": true, "desc": "智能点餐"},
+    {"id": "allergen_query", "agent": "order", "complex": false, "desc": "过敏原查询"},
+    {"id": "kitchen_dispatch", "agent": "kitchen", "complex": true, "desc": "后厨调度"},
+    {"id": "inventory_check", "agent": "kitchen", "complex": false, "desc": "食材库存检查"},
+    {"id": "review_analysis", "agent": "review", "complex": true, "desc": "评价分析"},
+    {"id": "improvement_advice", "agent": "review", "complex": false, "desc": "改进建议"},
+    {"id": "food_safety_query", "agent": "safety", "complex": false, "desc": "食安法规问答"},
+    {"id": "nutrition_query", "agent": "safety", "complex": false, "desc": "营养健康问答"}
+  ],
+  "tools": [
+    {
+      "name": "llm_classify_intent",
+      "category": "llm",
+      "owners": ["order"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "用 LLM 识别顾客点餐意图（人数/口味/过敏/预算）"
+    },
+    {
+      "name": "llm_recommend_dishes",
+      "category": "llm",
+      "owners": ["order"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "根据顾客需求智能推荐菜品组合（含推荐理由）"
+    },
+    {
+      "name": "llm_sentiment_analysis",
+      "category": "llm",
+      "owners": ["review"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "对顾客评价做情感分析（好评/中评/差评 + 强度）"
+    },
+    {
+      "name": "llm_generate_improvement",
+      "category": "llm",
+      "owners": ["review"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "根据评价分析结果生成改进建议报告"
+    },
+    {
+      "name": "allergen_detection",
+      "category": "rule",
+      "owners": ["order"],
+      "guarantee": "must_be_exact",
+      "has_side_effect": false,
+      "description": "检测菜品过敏原（预设过敏原库 + 配方精确匹配 + 衍生物归一化）"
+    },
+    {
+      "name": "price_calculation",
+      "category": "rule",
+      "owners": ["order"],
+      "guarantee": "must_be_exact",
+      "has_side_effect": false,
+      "description": "计算订单总价（折扣/套餐/会员价/服务费）"
+    },
+    {
+      "name": "inventory_calculation",
+      "category": "rule",
+      "owners": ["kitchen"],
+      "guarantee": "must_be_exact",
+      "has_side_effect": false,
+      "description": "计算食材需求量并对比当前库存"
+    },
+    {
+      "name": "priority_calculation",
+      "category": "rule",
+      "owners": ["kitchen"],
+      "guarantee": "must_be_exact",
+      "has_side_effect": false,
+      "description": "计算订单优先级（5 维加权打分）"
+    },
+    {
+      "name": "search_menu_knowledge",
+      "category": "mcp",
+      "owners": ["order"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "菜品知识库检索（本地关键词检索）"
+    },
+    {
+      "name": "query_food_safety_law",
+      "category": "mcp",
+      "owners": ["review", "safety"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "食品安全法规知识库查询（需给出条款出处）"
+    },
+    {
+      "name": "query_nutrition",
+      "category": "mcp",
+      "owners": ["order", "safety"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "查询菜品营养成分"
+    },
+    {
+      "name": "web_search",
+      "category": "mcp",
+      "owners": ["review", "safety"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "联网搜索（餐饮趋势/竞品动态）"
+    },
+    {
+      "name": "get_order_detail",
+      "category": "external",
+      "owners": ["order", "kitchen"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "查询订单详情（对接甲方 POS 系统，只读）"
+    },
+    {
+      "name": "get_ingredient_inventory",
+      "category": "external",
+      "owners": ["kitchen"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "查询食材库存（对接食材管理系统，只读）"
+    },
+    {
+      "name": "get_review_data",
+      "category": "external",
+      "owners": ["review"],
+      "guarantee": "best_effort",
+      "has_side_effect": false,
+      "description": "采集多平台评价（美团/大众点评/抖音，只读）"
+    }
+  ],
+  "guards": [
+    {
+      "id": "allergen_rule_engine",
+      "type": "rule_engine",
+      "bypass_llm": true,
+      "scope": "tools:allergen_detection",
+      "note": "配料 × 禁忌集合交集，模型完全不参与；衍生物表做加工形态归一化"
+    },
+    {
+      "id": "price_rule_engine",
+      "type": "rule_engine",
+      "bypass_llm": true,
+      "scope": "tools:price_calculation",
+      "note": "金额不允许由模型生成，只能由确定性算价函数产出"
+    },
+    {
+      "id": "inventory_rule_engine",
+      "type": "rule_engine",
+      "bypass_llm": true,
+      "scope": "tools:inventory_calculation",
+      "note": "库存扣减量必须是确定性结果"
+    },
+    {
+      "id": "priority_rule_engine",
+      "type": "rule_engine",
+      "bypass_llm": true,
+      "scope": "tools:priority_calculation",
+      "note": "排单顺序影响出餐公平性，走 5 维加权而非模型偏好"
+    },
+    {
+      "id": "write_ops_hitl",
+      "type": "human_in_the_loop",
+      "bypass_llm": true,
+      "scope": "api:submit_order / api:dispatch / api:refund",
+      "note": "写操作一律 interrupt 挂起，人工确认后才落库；模型无法直接改数据"
+    },
+    {
+      "id": "state_schema",
+      "type": "schema_validation",
+      "bypass_llm": true,
+      "scope": "state write-back",
+      "note": "节点返回增量由基类合并回完整 State，合并结果过 Pydantic 校验"
+    },
+    {
+      "id": "tenant_quota",
+      "type": "quota",
+      "bypass_llm": false,
+      "scope": "per-tenant LLM calls",
+      "note": "按 tenant_id 限流，防单租户打爆额度"
+    }
+  ],
+  "evidence": [
+    {
+      "name": "过敏原对抗集",
+      "cases": 124,
+      "detail": "109 条衍生物表述 + 15 条反向样本；修复前 0 检出，补衍生物归一化后召回 109/109、反向误报 0/15"
+    },
+    {
+      "name": "菜单全量判定回归",
+      "cases": 37050,
+      "detail": "570 道菜 × 65 词条；单次规则判定 P95 < 80μs（不含模型推理）"
+    },
+    {
+      "name": "接口冒烟",
+      "cases": 18,
+      "detail": "18 个对外接口 + 5 个辅助接口全部通过"
+    },
+    {
+      "name": "图结构校验",
+      "cases": 4,
+      "detail": "4 个 Agent 的入口/终态/条件边可达性校验，防条件边回退导致的静默终止"
+    }
+  ]
+}

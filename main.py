@@ -1,5 +1,5 @@
 """
-    FoodAgent 统一启动入口：main.py
+    AgentFlow 统一启动入口：main.py
 
     职责：项目根目录唯一入口，负责：
         1. 校验运行环境（Python 版本、依赖完整性、配置文件）
@@ -102,6 +102,23 @@ def check_environment() -> bool:
         print(f"[FAIL] 配置加载失败：{exc}")
         ok = False
 
+    # ⑥ 能力包自检（契约 + 声明与代码的一致性，零模型调用）
+    try:
+        from agentflow.runtime import get_runtime
+
+        runtime = get_runtime()
+        active = runtime.active
+        if active:
+            print(f"[OK]   能力包 {active.pack_id} v{active.version}："
+                  f"{len(active.agents)} Agent / {active.node_total} 节点 / "
+                  f"{len(active.tools)} 工具 / {len(active.intents)} 意图 / "
+                  f"{len(active.guards)} 护栏")
+        else:
+            print("[WARN] 未发现能力包（verticals/*/pack.json），平台以裸运行时模式运行")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[FAIL] 能力包装配失败：{exc}")
+        ok = False
+
     print("=" * 72)
     print("  自检结果：" + ("通过，可以启动服务" if ok else "未通过，请先修复上述 FAIL 项"))
     print("=" * 72)
@@ -113,7 +130,7 @@ def check_environment() -> bool:
 # ==================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="FoodAgent AI 智能餐饮 Agent 系统")
+    parser = argparse.ArgumentParser(description="AgentFlow · 企业级多 Agent 编排平台")
     parser.add_argument("--host", default=None, help="监听地址（默认取配置）")
     parser.add_argument("--port", type=int, default=None, help="监听端口（默认取配置 8090）")
     parser.add_argument("--check", action="store_true", help="仅做环境自检，不启动服务")

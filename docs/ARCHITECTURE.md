@@ -1,4 +1,4 @@
-# FoodAgent 架构与流程详解
+# AgentFlow 架构与流程详解
 
 > 这份文档的目标：**让你在半小时内搞清楚一次请求在系统里怎么流动、每层代码负责什么、想改东西该动哪个文件。**
 > 配套的顶层架构图与业务说明见 [README.md](../README.md)；需求口径见 [REQUIREMENTS.md](REQUIREMENTS.md)。
@@ -20,6 +20,7 @@
 11. [代码索引：想改 X 去哪](#十一代码索引想改-x-去哪)
 12. [调试指南](#十二调试指南)
 13. [上手验证清单](#十三上手验证清单)
+14. [平台层：运行时与能力包分离](#十四平台层运行时与能力包分离)
 
 ---
 
@@ -719,3 +720,105 @@ python scripts/test_api.py
 | **降级** | 依赖不可用时切换到备用实现，而不是报错 |
 | **tenant_id** | 门店 ID，数据隔离的第一道边界 |
 | **DSN** | 数据库连接串 `postgresql://user:pwd@host:port/db` |
+
+---
+
+## 十四、平台层：运行时与能力包分离
+
+### 14.1 为什么拆这一层
+
+v1 的问题不是"功能不够"，而是**"餐饮"和"编排"耦合死了**：
+4 个 Agent、15 个工具、9 类意图以硬编码常量散落在 `base/config.py`、
+`agents/*/graph.py`、`tools/registry.py` 三处，想让这套编排去跑另一个业务场景，
+唯一的做法是复制整个仓库——这意味着任何一次运行时缺陷修复都要改两遍。
+
+v2 把**"怎么装配"**和**"装配成什么"**分开：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  L2 编排层 · 平台装配器（agentflow/）                      │
+│    contracts.py     ← 装配关系的契约 + 校验规则            │
+│    pack_loader.py   ← 加载 + 与代码事实交叉校验            │
+│    runtime.py       ← 装配运行时 / 平台自述 / CI 严格校验   │
+└───────────────────────┬──────────────────────────────────┘
+                        │ 读
+        ┌───────────────▼────────────────┐
+        │ verticals/<pack_id>/pack.json  │  ← 纯数据
+        │  agents[] / tools[] / intents[] │
+        │  guards[] / evidence[]          │
+        └───────────────┬────────────────┘
+                        │ 指向实现
+        ┌───────────────▼────────────────┐
+        │ agents/ · tools/ · prompts/     │  ← 参考实现（餐饮）
+        └─────────────────────────────────┘
+```
+
+一句话：**换业务场景 = 换一个 pack + 提供对应实现，运行时一行不改。**
+
+### 14.2 契约里最重要的是 `guarantee`
+
+`ToolSpec.guarantee` 只有两个取值，但它决定了整个平台的安全姿态：
+
+| 取值 | 含义 | 平台行为 |
+|---|---|---|
+| `must_be_exact` | 结果进业务判定或写库 | **禁止走模型**，必须由规则引擎产出；契约强制要求存在 `bypass_llm` 的 `rule_engine` 护栏 |
+| `best_effort` | 只影响表达与建议 | 允许模型参与，失败可降级 |
+
+餐饮包里 4 个工具被标记为 `must_be_exact`：`allergen_detection`、`price_calculation`、
+`inventory_calculation`、`priority_calculation`。这不是文档里的约定，是启动期会校验的硬约束——
+把 `allergen_detection` 改成 `best_effort` 删掉规则引擎护栏，`verify_platform.py` 立刻报错。
+
+### 14.3 启动期跑什么
+
+`get_runtime()` 在 FastAPI lifespan 的第一段执行（早于工具预热），因为
+"应该装成什么样"（pack）要先于"实际装成了什么样"（registry）打印，否则看不出差异。
+
+校验分两类：
+
+**① 契约自洽**（`VerticalPack.validate`）
+工具名唯一 → 工具归属 Agent 真实存在 → 意图指向 Agent 真实存在 → 每个 Agent 至少被一个意图指向 →
+`AgentSpec.intents` 与 `IntentSpec` 双向一致 → 副作用工具有人工卡点 → `must_be_exact` 工具规则引擎护栏。
+
+**② 声明 vs 代码漂移**（`pack_loader.cross_check`）
+静态扫描 `agents/<id>/graph.py` 里 `define_nodes` 返回的字典键，数出真实节点数；
+静态扫描 `tools/*.py` 的四类工具字典，取出真实工具清单与分类。
+**不做 import**——装配期不该把 langgraph / openai 这些重依赖拉起来。
+
+这里踩过一个坑，值得记：第一版对整段 `graph.py` 做正则计数，把 `conditional_edges`
+的路由分支名也算成了节点，OrderAgent 的 10 个节点被数成 19 个。改成括号配对
+（只取 `return {` 这一层、深度 1 上的键）后才对。**校验器本身也会错，所以它必须有反向自测。**
+
+### 14.4 反向自测：证明校验器真的会拦
+
+正例全绿不能证明校验器有效——一个永远返回 `True` 的校验器也能做到。
+`scripts/verify_platform.py` 里有 4 个故意造的违规，逐个确认被拦：
+
+```
+[PASS] 重复工具名：已拦截
+[PASS] 工具归属幽灵 Agent：已拦截
+[PASS] 副作用工具无人工卡点：已拦截
+[PASS] 确定性工具无规则引擎护栏：已拦截
+```
+
+第 2 条当时没过，暴露的是测试代码自己的 bug（`frozen dataclass` 不能就地赋值），
+不是校验器的问题——这类"反向自测先抓自己"的场景，正好说明为什么要有它。
+
+### 14.5 加一个新垂直领域的完整步骤
+
+1. 写 `verticals/<id>/pack.json`：agents / tools / intents / guards / evidence
+2. 提供实现：`agents/<agent_id>/`（graph、nodes、prompts、state）与 `tools/` 下对应函数
+3. `ACTIVE_PACK=<id>` 或把新包 `status` 设为 `reference`
+4. `python scripts/verify_platform.py` → 契约与漂移检查全绿
+5. 运行 `python main.py --check` 确认装配日志里出现新包
+
+### 14.6 这一层在面试里怎么讲
+
+- **"这不就是把配置抽出来了吗？"** —— 不只是。抽配置谁都会，难的是让配置与代码**不能漂移**：
+  声明 10 个节点，代码里就必须是 10 个，否则 CI 红。抽配置解决的是"改起来麻烦"，
+  漂移检查解决的是"改错了不知道"。
+- **"为什么不用 Dify 的 DSL？"** —— Dify 的 DSL 描述的是 prompt 链条，不描述可靠性等级。
+  我这套的第一个字段就是 `guarantee`：哪些判定禁止走模型、哪些写操作必须人工卡点。
+  这是给业务系统嵌的前提，不是给业务同学搭着玩。
+- **"护栏靠什么保证不被绕过？"** —— 三处：契约校验（启动期）、`ToolRegistry.get()`
+  按名取实现（节点拿不到未注册工具）、以及 `write_ops_hitl` 在 API 层 interrupt 挂起。
+  模型即使幻觉出"帮我退款"，也没有可以直接改数据的通道。

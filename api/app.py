@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         · 记录关闭日志（连接由各客户端按需创建，无需显式释放）
     """
     logger.info("=" * 72)
-    logger.info("  FoodAgent AI 智能餐饮 Agent 系统  启动中 ...")
+    logger.info("  AgentFlow · 企业级多 Agent 编排平台  启动中 ...")
     logger.info("=" * 72)
 
     # ---------- ① 配置自检 ----------
@@ -69,6 +69,27 @@ async def lifespan(app: FastAPI):
 
     if not report["llm"]["api_key_present"]:
         logger.warning("[启动] LLM API Key 未配置或格式非法，所有 LLM 工具将走规则引擎降级分支")
+
+    # ---------- ①.5 平台能力包装配（契约校验 + 漂移检查）----------
+    # 放在工具预热之前：能力包描述的是"应该装成什么样"，
+    # 后面的工具注册校验回答的是"实际装成了什么样"，顺序反了就看不出差异。
+    try:
+        from agentflow.runtime import get_runtime
+
+        runtime = get_runtime()
+        active = runtime.active
+        if active:
+            logger.info(f"[启动] 能力包      : {active.pack_id} v{active.version}"
+                        f"（{active.display_name}）")
+            logger.info(f"[启动]   规模      : {len(active.agents)} Agent / "
+                        f"{active.node_total} 节点 / {len(active.tools)} 工具 / "
+                        f"{len(active.intents)} 意图 / {len(active.guards)} 护栏")
+            logger.info(f"[启动]   确定性工具: {len(active.exact_tool_names)} 个禁止走模型"
+                        f" → {', '.join(active.exact_tool_names)}")
+        else:
+            logger.warning("[启动] 未装配任何能力包，平台以裸运行时模式启动")
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"[启动] 能力包装配失败（不影响启动）: {exc}")
 
     # ---------- ② 预热长期记忆仓库 ----------
     try:
@@ -165,16 +186,21 @@ async def lifespan(app: FastAPI):
 # ==================================================================
 
 app = FastAPI(
-    title="FoodAgent AI 智能餐饮 Agent 系统",
+    title="AgentFlow · 企业级多 Agent 编排平台",
     description=(
-        "基于 LangGraph + Orchestrator 的智能餐饮 Agent 系统。\n\n"
-        "- **4 个 Agent**：OrderAgent(10 节点) / KitchenAgent(7 节点) / ReviewAgent(7 节点) / SafetyAgent(9 节点)\n"
-        "- **15 个工具**：LLM 工具 4 / 规则引擎 4 / MCP 工具 4 / 外部 API 封装 3\n"
-        "- **9 类意图**：菜品推荐 / 智能点餐 / 过敏原查询 / 后厨调度 / 库存检查 / 评价分析 / 改进建议 / 食安法规问答 / 营养健康问答\n"
-        "- **三层记忆**：Checkpointer 短期记忆 + PostgreSQL 长期记忆 + 餐饮行业特定记忆\n"
-        "- **自包含**：食品安全法规与营养知识由内置知识库提供，无需外部服务"
+        "以 LangGraph 为执行内核的多 Agent 编排平台：**编排运行时（agentflow/）** 与 "
+        "**垂直领域能力包（verticals/）** 分离，换业务场景只换能力包，不复制仓库。\n\n"
+        "- **能力包**：`verticals/*/pack.json` 用数据描述 Agent / 工具 / 意图 / 护栏；"
+        "启动期做契约校验，声明与代码不一致直接报错\n"
+        "- **参考实现**：连锁餐饮能力包 —— OrderAgent(10 节点) / KitchenAgent(7 节点) / "
+        "ReviewAgent(7 节点) / SafetyAgent(9 节点)，共 33 节点\n"
+        "- **15 个工具**：LLM 4 / 规则引擎 4 / MCP 4 / 外部 API 3；其中 4 个标记为 "
+        "`must_be_exact`，禁止交给模型\n"
+        "- **7 条护栏**：规则引擎接管判定、写操作 interrupt 人工卡点、State 回写 schema 校验、按租户限流\n"
+        "- **9 类意图**：LLM 优先 + 规则兜底，跨 Agent 诉求自动切 Pipeline\n"
+        "- 平台自述见 `/api/platform`"
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -191,6 +217,31 @@ app.add_middleware(
 
 # ---------- 业务路由 ----------
 app.include_router(router)
+
+
+# ==================================================================
+# 平台自述：能力包 / 护栏 / 工具可靠性等级
+# ==================================================================
+
+@app.get("/api/platform", tags=["平台"])
+async def platform_info():
+    """
+    平台自述接口。
+
+    回答三个问题：这台「编排平台」当前装配了哪个垂直领域能力包、
+    每个能力包带了哪些不可绕过的护栏、哪些工具被禁止交给模型。
+    数据源是 verticals/*/pack.json，不是硬编码——换场景只换能力包。
+    """
+    from agentflow.runtime import get_runtime
+
+    runtime = get_runtime()
+    return {
+        "ok": True,
+        "data": {
+            **runtime.summary(),
+            "tools": runtime.describe_tools(),
+        },
+    }
 
 
 # ==================================================================
@@ -242,7 +293,7 @@ async def index():
     return JSONResponse(
         status_code=200,
         content={
-            "service": "FoodAgent AI 智能餐饮 Agent 系统",
+            "service": "AgentFlow · 企业级多 Agent 编排平台",
             "message": "前端页面未找到，请访问 /docs 使用接口文档",
             "docs": "/docs",
             "health": "/api/health",

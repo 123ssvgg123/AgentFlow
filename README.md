@@ -1,12 +1,68 @@
-# FoodAgent · AI 智能餐饮 Agent 系统
+# AgentFlow · 企业级多 Agent 编排平台
 
-> 基于 **LangGraph 状态图 + Orchestrator 编排器** 的连锁餐饮智能助手。
-> **4 个专业 Agent、33 个节点、15 个分层工具、9 类餐饮意图**、三层记忆架构，
-> 完整覆盖「**点餐 → 后厨 → 评价 → 食安问答**」餐饮业务全链路。
-> 知识层为**内置知识库**（法规要点 + 菜品营养 + 过敏原规范），零外部依赖可运行；
-> 接口按可插拔设计，换外部 RAG/向量库只需改 `tools/mcp_tools.py` 的数据源。
+> 以 **LangGraph 为执行内核**的 Agent 编排平台：**编排运行时**（`agentflow/`）与
+> **垂直领域能力包**（`verticals/`）分离，换业务场景只换一个 `pack.json` + 对应实现，不复制仓库。
+>
+> 平台管的是四件事：**预置状态图** · **分层工具治理** · **写操作人机卡点** · **契约校验与节点级可观测**。
+>
+> **参考实现**：连锁餐饮能力包 —— 4 个专业 Agent、33 个节点、15 个分层工具、9 类意图，
+> 覆盖「**点餐 → 后厨 → 评价 → 食安问答**」业务全链路。
+> 之所以拿它当 reference，是因为它同时具备平台必须处理的三个问题：
+> **结果不可错的判定**（过敏原/价格/库存）、**有副作用的写操作**（下单/改派/退款）、
+> **跨 Agent 的诉求切换**（一句话里既要点餐又要问法规）。
 
-> **新手先读**：想快速搞懂「一次请求在系统里怎么流动、代码在哪」，直接看 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**（含完整流程图与代码索引）。
+> **和 Dify / Coze 的区别**：那类平台是"给人搭的"，AgentFlow 是"给业务系统嵌的"——
+> 状态图可预置、写操作强制人工卡点、断点续跑、每个节点可单测可定位。
+> 选 LangGraph 而不是 CrewAI，是因为需要预置条件边 + interrupt 原生中断恢复 + 断点续跑，
+> 而这三点 CrewAI 都没有。
+
+> **新手先读**：想快速搞懂「一次请求在系统里怎么流动、代码在哪」，直接看 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**（含完整流程图、平台层说明与代码索引）。
+
+---
+
+## 零、平台层：运行时与能力包
+
+一个能力包 = 一套可被平台装配的业务能力。它用**数据**描述装配关系，而不是散落在代码里：
+
+```
+verticals/<pack_id>/pack.json     ← Agent / 工具 / 意图 / 护栏，全是数据
+agentflow/contracts.py            ← 契约与校验规则（不是文档，是代码）
+agentflow/pack_loader.py          ← 加载 + 与代码事实交叉校验（防声明漂移）
+agentflow/runtime.py              ← 装配运行时，对外自述 /api/platform
+```
+
+启动期发生的事情（任一不满足直接报错，不带病启动）：
+
+| 校验项 | 不通过会怎样 |
+|---|---|
+| 工具名唯一 | 重名会让 `registry.get()` 静默取到错的实现 |
+| 工具归属 Agent 必须真实存在 | 否则 `/api/tools` 展示的归属是假的 |
+| 每个 Agent 至少被一个意图指向 | 否则是永远进不去的死 Agent |
+| `AgentSpec.intents` 与 `IntentSpec` 双向一致 | 防止两处各改一半 |
+| 有副作用的工具必须被人工卡点覆盖 | 写操作护栏是安全底线 |
+| `must_be_exact` 工具必须有 `bypass_llm` 的规则引擎护栏 | 否则金额/过敏原会被模型算 |
+
+另外还做**声明 vs 代码**的漂移检查：`pack.json` 说 OrderAgent 有 10 个节点，
+`agents/order/graph.py` 里就必须真有 10 个——文档会过期，代码不会。
+
+```bash
+python scripts/verify_platform.py      # 离线自检，零模型调用，成本为 0
+```
+
+```
+能力包 catering（连锁餐饮（门店全链路））v1.0.0
+  契约校验：通过
+  Agent 4 个 / 节点 33 个 / 工具 15 个 / 意图 9 个 / 护栏 7 个
+  确定性工具（禁止走模型）：4 个 → allergen_detection, price_calculation, ...
+  [PASS] 重复工具名：已拦截
+  [PASS] 工具归属幽灵 Agent：已拦截
+  [PASS] 副作用工具无人工卡点：已拦截
+  [PASS] 确定性工具无规则引擎护栏：已拦截
+结论：通过（错误 0 项，告警 0 项）
+```
+
+**换一个垂直领域要做什么**：写一个 `verticals/<id>/pack.json`，提供对应的 Agent 实现与工具，
+把 `ACTIVE_PACK=<id>` 设上。运行时（路由、记忆、留痕、降级、可观测）一行不用改。
 
 ---
 
@@ -191,7 +247,7 @@ docker compose -f docs/deploy/docker-compose.yml up -d    # Docker 一键编排�
 ## 四、目录结构
 
 ```
-FoodAgent/
+AgentFlow/
 ├── main.py                     # 统一启动入口（含环境自检）
 ├── app.py                      # 根目录薄封装（兼容 python app.py）
 ├── run_cli.py                  # 终端交互模式
@@ -200,9 +256,19 @@ FoodAgent/
 ├── requirements.txt
 ├── Dockerfile
 │
+├── agentflow/                  # 平台层（与业务无关的装配能力）
+│   ├── contracts.py            # 能力包契约：AgentSpec/ToolSpec/IntentSpec/GuardSpec + 校验规则
+│   ├── pack_loader.py          # 加载 pack.json，并与代码事实交叉校验（防声明漂移）
+│   └── runtime.py              # 装配运行时：当前激活包 / 平台自述 / CI 严格校验
+│
+├── verticals/                  # 垂直领域能力包（数据驱动，一个场景一个包）
+│   └── catering/
+│       └── pack.json           # 连锁餐饮：4 Agent / 33 节点 / 15 工具 / 9 意图 / 7 护栏
+│
 ├── base/                       # 基础设施层
 │   ├── config.py               # 配置唯一来源（.env > config.ini > fallback）
 │   ├── logger.py               # 统一日志（控制台 + logs/app.log）
+│   ├── run_policy.py           # 远程模型调用策略（最小验证闸门 / 熔断）
 │   └── exceptions.py           # 异常体系 + 重试装饰器 + 降级工具
 │
 ├── tools/                      # 工具层（15 个，四类分层）
